@@ -1,0 +1,26 @@
+
+> api@1.0.0 dev /Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/apps/api
+> ts-node-dev -r tsconfig-paths/register --respawn src/index.ts
+
+[INFO] 10:59:56 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.2)
+/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/node_modules/.pnpm/ts-node@10.9.2_@types+node@20.19.9_typescript@5.9.2/node_modules/ts-node/src/index.ts:859
+    return new TSError(diagnosticText, diagnosticCodes, diagnostics);
+           ^
+TSError: ⨯ Unable to compile TypeScript:
+error TS6053: File 'typescript-config/base.json' not found.
+
+    at createTSError (/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/node_modules/.pnpm/ts-node@10.9.2_@types+node@20.19.9_typescript@5.9.2/node_modules/ts-node/src/index.ts:859:12)
+    at reportTSError (/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/node_modules/.pnpm/ts-node@10.9.2_@types+node@20.19.9_typescript@5.9.2/node_modules/ts-node/src/index.ts:863:19)
+    at createFromPreloadedConfig (/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/node_modules/.pnpm/ts-node@10.9.2_@types+node@20.19.9_typescript@5.9.2/node_modules/ts-node/src/index.ts:874:36)
+    at create (/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/node_modules/.pnpm/ts-node@10.9.2_@types+node@20.19.9_typescript@5.9.2/node_modules/ts-node/src/index.ts:624:10)
+    at Object.register (/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/node_modules/.pnpm/ts-node@10.9.2_@types+node@20.19.9_typescript@5.9.2/node_modules/ts-node/src/index.ts:591:15)
+    at registerTsNode (/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/node_modules/.pnpm/ts-node-dev@2.0.0_@types+node@20.19.9_typescript@5.9.2/node_modules/ts-node-dev/lib/compiler.js:174:16)
+    at Object.init (/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/node_modules/.pnpm/ts-node-dev@2.0.0_@types+node@20.19.9_typescript@5.9.2/node_modules/ts-node-dev/lib/compiler.js:121:9)
+    at Object.exports.runDev (/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/node_modules/.pnpm/ts-node-dev@2.0.0_@types+node@20.19.9_typescript@5.9.2/node_modules/ts-node-dev/lib/index.js:256:14)
+    at Object.<anonymous> (/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/node_modules/.pnpm/ts-node-dev@2.0.0_@types+node@20.19.9_typescript@5.9.2/node_modules/ts-node-dev/lib/bin.js:136:4)
+    at Module._compile (node:internal/modules/cjs/loader:1554:14) {
+  diagnosticCodes: [ 6053 ]
+}
+/Users/muhsinabdulnissar/MUHSIN/Zik/CONVO/convo-mono/apps/api:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  api@1.0.0 dev: `ts-node-dev -r tsconfig-paths/register --respawn src/index.ts`
+Exit status 1
