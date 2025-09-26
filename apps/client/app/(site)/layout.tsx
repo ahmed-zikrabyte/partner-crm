@@ -9,6 +9,7 @@ import ConfirmationModal from "@/components/global/confirmation-modal";
 import { AppSidebar } from "@/components/global/app-sidebar";
 import { Button } from "@workspace/ui/components/button";
 
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +25,7 @@ import {
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
   const pathname = usePathname();
   const router = useRouter();
 
@@ -51,9 +53,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         router.replace("/login");
       } else {
         setIsAuthenticated(true);
+
       }
     }
   }, [router]);
+
+
 
   if (isAuthenticated === null) {
     return null; // Or a loader if you prefer

@@ -99,4 +99,42 @@ export class PartnerAuthService {
       throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
     }
   }
+
+  /** Get Partner Profile */
+  async getPartnerProfile(partnerId: string): Promise<ServiceResponse> {
+    try {
+      const partner = await this.partnerModel.findById(partnerId).select("-password");
+      if (!partner) throw new AppError("Partner not found", HTTP.NOT_FOUND);
+
+      return {
+        data: partner,
+        message: "Partner profile retrieved successfully",
+        status: HTTP.OK,
+        success: true,
+      };
+    } catch (error) {
+      console.error(error);
+      if (error instanceof AppError) throw error;
+      throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /** Get Employee Profile */
+  async getEmployeeProfile(employeeId: string): Promise<ServiceResponse> {
+    try {
+      const employee = await EmployeeModel.findById(employeeId).select("-password");
+      if (!employee) throw new AppError("Employee not found", HTTP.NOT_FOUND);
+
+      return {
+        data: employee,
+        message: "Employee profile retrieved successfully",
+        status: HTTP.OK,
+        success: true,
+      };
+    } catch (error) {
+      console.error(error);
+      if (error instanceof AppError) throw error;
+      throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
+    }
+  }
 }

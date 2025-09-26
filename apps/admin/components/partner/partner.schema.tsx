@@ -39,6 +39,7 @@ export interface PartnerData {
   email: string;
   phone: string;
   role: "partner";
+  cashAmount?: number;
   isActive: boolean;
   isDeleted: boolean;
   createdAt: string;

@@ -28,6 +28,12 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@workspace/ui/components/tabs";
 import type { ColumnDef } from "@tanstack/react-table";
 import { getVendorById } from "@/services/vendorService";
 import { getAllDevices } from "@/services/deviceService";
@@ -113,7 +119,7 @@ export default function VendorDetailsPage({
     {
       accessorKey: "selling",
       header: "Selling Price",
-      cell: ({ row }) => `$${row.original.selling || 0}`,
+      cell: ({ row }) => `₹${row.original.selling || 0}`,
     },
     {
       accessorKey: "isActive",
@@ -147,7 +153,7 @@ export default function VendorDetailsPage({
     {
       accessorKey: "amount",
       header: "Amount",
-      cell: ({ row }) => `$${row.original.amount || 0}`,
+      cell: ({ row }) => `₹${row.original.amount || 0}`,
     },
     {
       accessorKey: "note",
@@ -211,7 +217,7 @@ export default function VendorDetailsPage({
               <label className="text-sm font-medium text-gray-500">
                 Amount
               </label>
-              <p className="text-lg font-semibold">${vendor.amount || 0}</p>
+              <p className="text-lg font-semibold">₹{vendor.amount || 0}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-500">
@@ -227,45 +233,55 @@ export default function VendorDetailsPage({
         </CardContent>
       </Card>
 
-      {/* Transactions Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Transactions ({transactions.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            data={transactions}
-            columns={transactionColumns}
-            pagination={{
-              currentPage: 1,
-              totalPages: 1,
-              hasNext: false,
-              hasPrev: false,
-            }}
-            onPaginationChange={() => {}}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Devices Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Devices ({totalDevices})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            data={devices}
-            columns={deviceColumns}
-            pagination={{
-              currentPage: 1,
-              totalPages: 1,
-              hasNext: false,
-              hasPrev: false,
-            }}
-            onPaginationChange={() => {}}
-          />
-        </CardContent>
-      </Card>
+      {/* Tabs for Transactions and Devices */}
+      <Tabs defaultValue="transactions" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="transactions">Transactions ({transactions.length})</TabsTrigger>
+          <TabsTrigger value="devices">Devices ({totalDevices})</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="transactions">
+          <Card>
+            <CardHeader>
+              <CardTitle>Transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={transactions}
+                columns={transactionColumns}
+                pagination={{
+                  currentPage: 1,
+                  totalPages: 1,
+                  hasNext: false,
+                  hasPrev: false,
+                }}
+                onPaginationChange={() => {}}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="devices">
+          <Card>
+            <CardHeader>
+              <CardTitle>Devices</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={devices}
+                columns={deviceColumns}
+                pagination={{
+                  currentPage: 1,
+                  totalPages: 1,
+                  hasNext: false,
+                  hasPrev: false,
+                }}
+                onPaginationChange={() => {}}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Add Transaction Modal */}
       <Dialog open={captureAmountOpen} onOpenChange={setCaptureAmountOpen}>

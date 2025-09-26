@@ -49,9 +49,9 @@ export default function ConfirmationModal({
       case "destructive":
         return <AlertTriangle className="h-6 w-6 text-destructive" />;
       case "warning":
-        return <AlertCircle className="h-6 w-6 text-yellow-500" />;
+        return <AlertCircle className="h-6 w-6 text-black" />;
       default:
-        return <Info className="h-6 w-6 text-blue-500" />;
+        return <Info className="h-6 w-6 text-black" />;
     }
   };
 

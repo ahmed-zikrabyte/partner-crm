@@ -13,7 +13,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@workspace/ui/components/sidebar";
-import { ChevronRight, Users } from "lucide-react";
+import { ChevronRight, Users, Building2 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   Tooltip,
@@ -88,7 +88,8 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel className="flex justify-center border-b border-gray-100 p-5">
               <div className="flex items-center space-x-2">
-                {/* Place logo here */}
+                <Building2 className="h-8 w-8 text-primary" />
+                <span className="text-lg font-bold text-primary">Admin CRM</span>
               </div>
             </SidebarGroupLabel>
 

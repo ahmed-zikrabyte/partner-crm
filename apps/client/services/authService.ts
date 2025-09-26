@@ -20,3 +20,13 @@ export const getCurrentUser = async () => {
   const response = await axiosInstance.get("/partner/auth/me");
   return response?.data;
 };
+
+export const getPartnerProfile = async () => {
+  const response = await axiosInstance.get("/partner/auth/profile");
+  return response?.data;
+};
+
+export const getEmployeeProfile = async () => {
+  const response = await axiosInstance.get("/partner/auth/employee-profile");
+  return response?.data;
+};

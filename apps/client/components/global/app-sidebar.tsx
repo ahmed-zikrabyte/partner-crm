@@ -13,7 +13,16 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@workspace/ui/components/sidebar";
-import { ChevronRight, Users } from "lucide-react";
+import {
+  ChevronRight,
+  Users,
+  Building2,
+  ShoppingCart,
+  UserCheck,
+  Clock,
+  Smartphone,
+  User,
+} from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   Tooltip,
@@ -72,16 +81,18 @@ export function AppSidebar() {
   const getFilteredNavigationItems = (userType: string | null) => {
     if (userType === "partner") {
       return [
-        { title: "Company", url: "/company", icon: Users },
-        { title: "Vendor", url: "/vendor", icon: Users },
+        { title: "Company", url: "/company", icon: Building2 },
+        { title: "Vendor", url: "/vendor", icon: ShoppingCart },
         { title: "Employee", url: "/employee", icon: Users },
-        { title: "Attendance", url: "/attendance", icon: Users },
-        { title: "Device", url: "/device", icon: Users }
+        { title: "Attendance", url: "/attendance", icon: Clock },
+        { title: "Device", url: "/device", icon: Smartphone },
+        { title: "Profile", url: "/profile", icon: User },
       ];
     }
     if (userType === "employee") {
       return [
-        { title: "Device", url: "/device", icon: Users }
+        { title: "Device", url: "/device", icon: Smartphone },
+        { title: "Profile", url: "/profile", icon: User },
       ];
     }
     return [];
@@ -100,7 +111,10 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel className="flex justify-center border-b border-gray-100 p-5">
               <div className="flex items-center space-x-2">
-                {/* Place logo here */}
+                <Building2 className="h-8 w-8 text-primary" />
+                <span className="text-lg font-bold text-primary">
+                  {userType === "employee" ? "Employee CRM" : "Partner CRM"}
+                </span>
               </div>
             </SidebarGroupLabel>
 

@@ -143,6 +143,7 @@ export default function CompanyPage() {
     {
       accessorKey: "creditValue",
       header: "Credit Value",
+      cell: ({ row }) => `₹${row.original.creditValue}`,
     },
     {
       accessorKey: "isActive",

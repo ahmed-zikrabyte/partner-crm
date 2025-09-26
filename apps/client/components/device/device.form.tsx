@@ -281,6 +281,7 @@ export default function DeviceForm({
                 } ${
                   isReadOnly ? "bg-gray-50 text-gray-600" : ""
                 }`}
+                onWheel={(e) => type === "number" && e.currentTarget.blur()}
                 onChange={(e) =>
                   type === "number"
                     ? field.onChange(

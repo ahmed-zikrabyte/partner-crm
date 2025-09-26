@@ -45,4 +45,32 @@ export default class PartnerAuthController {
       statusCode: 200,
     });
   });
+
+  /** GET PARTNER PROFILE */
+  getPartnerProfile = catchAsync(async (req: Request, res: Response) => {
+    const partnerId = req.user?.id;
+    
+    const response = await this.authService.getPartnerProfile(partnerId);
+    
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
+      statusCode: response.status,
+    });
+  });
+
+  /** GET EMPLOYEE PROFILE */
+  getEmployeeProfile = catchAsync(async (req: Request, res: Response) => {
+    const employeeId = req.user?.id;
+    
+    const response = await this.authService.getEmployeeProfile(employeeId);
+    
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
+      statusCode: response.status,
+    });
+  });
 }

@@ -135,6 +135,7 @@ export default function VendorPage() {
     {
       accessorKey: "amount",
       header: "Amount",
+      cell: ({ row }) => `₹${row.original.amount}`,
     },
     {
       accessorKey: "isActive",

@@ -143,7 +143,7 @@ export default function EmployeePage() {
     {
       accessorKey: "salaryPerDay",
       header: "Salary/Day",
-      cell: ({ row }) => `$${row.original.salaryPerDay}`,
+      cell: ({ row }) => `₹${row.original.salaryPerDay}`,
     },
     {
       accessorKey: "isActive",
