@@ -18,7 +18,6 @@ import {
   Users,
   Building2,
   ShoppingCart,
-  UserCheck,
   Clock,
   Smartphone,
   User,
@@ -86,6 +85,7 @@ export function AppSidebar() {
         { title: "Employee", url: "/employee", icon: Users },
         { title: "Device", url: "/device", icon: Smartphone },
         { title: "Attendance", url: "/attendance", icon: Clock },
+        // { title: "Cashbook", url: "/cashbook", icon: Clock },
         { title: "Profile", url: "/profile", icon: User },
       ];
     }
@@ -104,9 +104,9 @@ export function AppSidebar() {
     <TooltipProvider delayDuration={300}>
       <Sidebar
         collapsible="icon"
-        className="border-border bg-secondary h-screen max-w-full border-r shadow-sm"
+        className="border-border bg-gray h-screen max-w-full border-r shadow-sm"
       >
-        <SidebarContent className="bg-secondary flex h-full flex-col justify-between">
+        <SidebarContent className="bg-gray flex h-full flex-col justify-between">
           {/* LOGO */}
           <SidebarGroup>
             <SidebarGroupLabel className="flex justify-center border-b border-gray-100 p-5">
@@ -119,7 +119,7 @@ export function AppSidebar() {
             </SidebarGroupLabel>
 
             {/* MENU */}
-            <SidebarGroupContent className="bg-secondary mt-2">
+            <SidebarGroupContent className=" mt-2">
               {filteredItems.length > 0 ? (
                 <SidebarMenu>
                   {filteredItems.map((item) => {

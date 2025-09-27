@@ -39,4 +39,14 @@ deviceRouter.get("/employees/list", (req: Request, res: Response, next: NextFunc
   deviceController.getEmployees(req, res, next)
 );
 
+// Export sold devices
+deviceRouter.get("/export/sold", (req: Request, res: Response, next: NextFunction) =>
+  deviceController.exportSoldDevices(req, res, next)
+);
+
+// Export new devices
+deviceRouter.get("/export/new", (req: Request, res: Response, next: NextFunction) =>
+  deviceController.exportNewDevices(req, res, next)
+);
+
 export default deviceRouter;

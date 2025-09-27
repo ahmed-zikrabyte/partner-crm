@@ -3,17 +3,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@workspace/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card";
+import { Card, CardContent, CardHeader } from "@workspace/ui/components/card";
 import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import {
-  Calendar,
   Download,
   ChevronLeft,
   ChevronRight,
@@ -255,37 +248,26 @@ export default function AttendancePage() {
     }
   };
 
-  const totalPresent = employees.reduce(
-    (sum, emp) => sum + emp.totalWorkingDays,
-    0
-  );
-  const totalAbsent = employees.reduce((sum, emp) => {
-    const absentDays = Object.values(emp.attendanceData).filter(
-      (status) => status === "Absent"
-    ).length;
-    return sum + absentDays;
-  }, 0);
-
   return (
     <div className="w-full flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Attendance Register</h1>
-          <p className="text-muted-foreground">
-            Monthly attendance tracking -{" "}
-            {new Date(selectedMonth + "-01").toLocaleDateString("en-US", {
-              month: "long",
-              year: "numeric",
-            })}
-          </p>
-        </div>
-      </div>
+      <NavBar
+        label={`Attendance Register - ${new Date(
+          selectedMonth + "-01"
+        ).toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric",
+        })}`}
+      />
 
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => navigateMonth("prev")}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateMonth("prev")}
+              >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <Input
@@ -307,7 +289,7 @@ export default function AttendancePage() {
                 {loading ? "Loading..." : "Refresh"}
               </Button>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Input
                 placeholder="Search employees..."
@@ -342,7 +324,6 @@ export default function AttendancePage() {
           </div>
         </CardHeader>
         <CardContent>
-
           <div className="border rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-max">
@@ -389,7 +370,7 @@ export default function AttendancePage() {
                           <div>
                             <div className="font-medium">{employee.name}</div>
                             <div className="text-xs text-muted-foreground">
-                              {employee.phone}
+                              {employee.email}
                             </div>
                           </div>
                         </div>

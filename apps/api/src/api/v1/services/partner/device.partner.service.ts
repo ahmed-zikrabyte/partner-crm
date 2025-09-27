@@ -35,11 +35,12 @@ export default class DeviceService {
     serviceNumber,
     box,
     warranty,
+    issues,
     authorType,
     authorId,
   }: Partial<IDevice> & {
     partnerId: string;
-    vendorId: string;
+    vendorId?: string;
     companyIds: string;
     brand: string;
     model: string;
@@ -48,10 +49,9 @@ export default class DeviceService {
     authorId: string;
   }): Promise<ServiceResponse> {
     try {
-      // Validate required fields
+      // Validate required fields (vendorId is now optional)
       const emptyFields = getEmptyFields({
         partnerId,
-        vendorId,
         companyIds,
         brand,
         model,
@@ -97,6 +97,7 @@ export default class DeviceService {
         serviceNumber,
         box,
         warranty,
+        issues,
         isActive: true,
       });
 
@@ -135,11 +136,19 @@ export default class DeviceService {
 
       // Clean updateData to ensure IDs are strings, not objects
       const cleanUpdateData = { ...updateData };
-      if (cleanUpdateData.vendorId && typeof cleanUpdateData.vendorId === 'object') {
-        cleanUpdateData.vendorId = (cleanUpdateData.vendorId as any)._id || cleanUpdateData.vendorId;
+      if (
+        cleanUpdateData.vendorId &&
+        typeof cleanUpdateData.vendorId === "object"
+      ) {
+        cleanUpdateData.vendorId =
+          (cleanUpdateData.vendorId as any)._id || cleanUpdateData.vendorId;
       }
-      if (cleanUpdateData.companyIds && typeof cleanUpdateData.companyIds === 'object') {
-        cleanUpdateData.companyIds = (cleanUpdateData.companyIds as any)._id || cleanUpdateData.companyIds;
+      if (
+        cleanUpdateData.companyIds &&
+        typeof cleanUpdateData.companyIds === "object"
+      ) {
+        cleanUpdateData.companyIds =
+          (cleanUpdateData.companyIds as any)._id || cleanUpdateData.companyIds;
       }
 
       // Update the device
@@ -149,11 +158,13 @@ export default class DeviceService {
         { new: true, runValidators: true }
       );
 
-      // Update vendor balance if selling changed
-      if (oldDevice.vendorId && oldSelling !== newSelling) {
-        const diff = newSelling - oldSelling;
-        await VendorModel.findByIdAndUpdate(oldDevice.vendorId, {
-          $inc: { amount: diff },
+      // Update vendor balance - only for first-time addition since UI disables fields after first edit
+      const newVendorId = cleanUpdateData.vendorId;
+
+      // If vendor is being added for the first time (no old vendor but new vendor exists)
+      if (!oldDevice.vendorId && newVendorId && newSelling > 0) {
+        await VendorModel.findByIdAndUpdate(newVendorId, {
+          $inc: { amount: newSelling },
         });
       }
 
@@ -177,14 +188,33 @@ export default class DeviceService {
     vendorId?: string,
     companyIds?: string,
     isActive?: boolean,
-    search?: string
+    search?: string,
+    filter?: any
   ): Promise<ServiceResponse> {
     try {
       const query: Record<string, any> = { isDeleted: false };
       if (partnerId) query.partnerId = partnerId;
       if (vendorId) query.vendorId = vendorId;
-      if (companyIds) query.companyId = companyIds;
+      if (companyIds) query.companyIds = companyIds;
       if (typeof isActive === "boolean") query.isActive = isActive;
+
+      // Enhanced filtering
+      if (filter) {
+        if (filter.vendorId === null) {
+          query.vendorId = null;
+        } else if (filter.vendorId && filter.vendorId.$ne !== undefined) {
+          query.vendorId = { $ne: null };
+        } else if (filter.vendorId) {
+          query.vendorId = filter.vendorId;
+        }
+
+        if (filter.companyIds) query.companyIds = filter.companyIds;
+        if (filter.pickedBy) query.pickedBy = filter.pickedBy;
+        if (filter.deviceType === "sold")
+          query.selling = { $exists: true, $ne: null };
+        if (filter.deviceType === "new") query.selling = { $exists: false };
+      }
+
       if (search)
         query.$or = [
           { brand: { $regex: search, $options: "i" } },
@@ -291,13 +321,146 @@ export default class DeviceService {
     }
   }
 
+  async exportSoldDevices(
+    partnerId: string,
+    filters?: any
+  ): Promise<ServiceResponse> {
+    try {
+      const query: Record<string, any> = {
+        isDeleted: false,
+        partnerId,
+        selling: { $exists: true, $ne: null },
+      };
+
+      if (filters?.vendorId) query.vendorId = filters.vendorId;
+      if (filters?.companyIds) query.companyIds = filters.companyIds;
+      if (filters?.pickedBy) query.pickedBy = filters.pickedBy;
+
+      const devices = await this.deviceModel
+        .find(query)
+        .populate("vendorId", "name")
+        .populate("companyIds", "name")
+        .populate("pickedBy", "name")
+        .sort({ createdAt: -1 });
+
+      const formatDate = (dateStr: string | Date) => {
+        if (!dateStr) return 'N/A';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return 'N/A';
+        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+      };
+
+      const exportData = devices.map((device) => ({
+        'Device ID': device.deviceId,
+        'Company': (device.companyIds as any)?.name || "N/A",
+        'Company ID': (device.companyIds as any)?._id || "N/A",
+        'Service Number': device.serviceNumber || 'N/A',
+        'Brand': device.brand,
+        'Model': device.model,
+        'Box': device.box || 'N/A',
+        'Warranty': device.warranty || 'N/A',
+        'Issues': device.issues || 'N/A',
+        'IMEI 1': device.imei1,
+        'IMEI 2': device.imei2 || 'N/A',
+        'Initial Cost': device.initialCost || 0,
+        'Cost': device.cost || 0,
+        'Extra Amount': device.extraAmount || 0,
+        'Credits': device.credit || 0,
+        'Per Credit Value': device.perCredit || 0,
+        'Commission': device.commission || 0,
+        'GST': device.gst || 0,
+        'Total Cost': device.totalCost || 0,
+        'Sold To': (device.vendorId as any)?.name || "N/A",
+        'Selling Price': device.selling || 0,
+        'Profit': device.profit || 0,
+        'Picked By': (device.pickedBy as any)?.name || "N/A",
+        'Picked Date': formatDate(device.date),
+      }));
+
+      return {
+        data: exportData,
+        message: "Sold devices exported successfully",
+        status: HTTP.OK,
+        success: true,
+      };
+    } catch (error) {
+      throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async exportNewDevices(
+    partnerId: string,
+    filters?: any
+  ): Promise<ServiceResponse> {
+    try {
+      const query: Record<string, any> = {
+        isDeleted: false,
+        partnerId,
+        $or: [{ selling: { $exists: false } }, { selling: null }],
+      };
+
+      if (filters?.vendorId) query.vendorId = filters.vendorId;
+      if (filters?.companyIds) query.companyIds = filters.companyIds;
+      if (filters?.pickedBy) query.pickedBy = filters.pickedBy;
+
+      const devices = await this.deviceModel
+        .find(query)
+        .populate("vendorId", "name")
+        .populate("companyIds", "name")
+        .populate("pickedBy", "name")
+        .sort({ createdAt: -1 });
+
+      const formatDate = (dateStr: string | Date) => {
+        if (!dateStr) return 'N/A';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return 'N/A';
+        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+      };
+
+      const exportData = devices.map((device) => ({
+        'Device ID': device.deviceId,
+        'Company': (device.companyIds as any)?.name || "N/A",
+        'Company ID': (device.companyIds as any)?._id || "N/A",
+        'Service Number': device.serviceNumber || 'N/A',
+        'Brand': device.brand,
+        'Model': device.model,
+        'Box': device.box || 'N/A',
+        'Warranty': device.warranty || 'N/A',
+        'Issues': device.issues || 'N/A',
+        'IMEI 1': device.imei1,
+        'IMEI 2': device.imei2 || 'N/A',
+        'Initial Cost': device.initialCost || 0,
+        'Purchased Cost': device.cost || 0,
+        'Extra Amount': device.extraAmount || 0,
+        'Credits': device.credit || 0,
+        'Per Credit Value': device.perCredit || 0,
+        'Commission': device.commission || 0,
+        'GST': device.gst || 0,
+        'Total Cost': device.totalCost || 0,
+        'Picked By': (device.pickedBy as any)?.name || "N/A",
+        'Picked Date': formatDate(device.date),
+        'Sold To': (device.vendorId as any)?.name || "N/A",
+      }));
+
+      return {
+        data: exportData,
+        message: "New devices exported successfully",
+        status: HTTP.OK,
+        success: true,
+      };
+    } catch (error) {
+      throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
+    }
+  }
+
   async getEmployeesByPartner(partnerId: string): Promise<ServiceResponse> {
     try {
       const employees = await EmployeeModel.find({
         partnerId,
-        isActive: true,
         isDeleted: false,
-      }).select("_id name");
+      })
+        .select("name _id")
+        .sort({ name: 1 });
 
       return {
         data: employees,

@@ -6,7 +6,7 @@ const nanoid = customAlphabet("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", 8);
 export interface IDevice {
   deviceId?: string;
   partnerId: mongoose.Types.ObjectId;
-  vendorId: mongoose.Types.ObjectId;
+  vendorId?: mongoose.Types.ObjectId;
   companyIds: mongoose.Types.ObjectId;
   selectedCompanyIds?: string;
   author: {
@@ -28,12 +28,15 @@ export interface IDevice {
   commission: number;
   gst: number;
   totalCost: number;
-  selling: number;
-  profit: number;
+  selling?: number;
+  profit?: number;
   box: string;
   warranty: string;
+  issues: string;
   isActive?: boolean;
   isDeleted?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const deviceSchema = new mongoose.Schema<IDevice>(
@@ -47,7 +50,7 @@ const deviceSchema = new mongoose.Schema<IDevice>(
     vendorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "vendor",
-      required: true,
+      required: false,
     },
     companyIds: {
       type: mongoose.Schema.Types.ObjectId,
@@ -86,10 +89,11 @@ const deviceSchema = new mongoose.Schema<IDevice>(
     commission: { type: Number, default: 0 },
     gst: { type: Number, default: 0 },
     totalCost: { type: Number, default: 0 },
-    selling: { type: Number, default: 0 },
-    profit: { type: Number, default: 0 },
+    selling: { type: Number },
+    profit: { type: Number },
     box: { type: String, trim: true },
     warranty: { type: String, trim: true },
+    issues: { type: String, trim: true },
     isActive: { type: Boolean, default: true },
     isDeleted: { type: Boolean, default: false },
   },
