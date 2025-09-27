@@ -1,0 +1,76 @@
+import type { Request, Response } from "express";
+import { catchAsync } from "../../../../utils/catch-async.util";
+import { ApiResponse } from "../../../../utils/response.util";
+import { PartnerAuthService } from "../../services/partner/auth.partner.service";
+
+export default class PartnerAuthController {
+  private authService = new PartnerAuthService();
+
+  /** PARTNER LOGIN */
+  login = catchAsync(async (req: Request, res: Response) => {
+    const { email, password } = req.body;
+
+    const response = await this.authService.login({ email, password });
+
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
+      statusCode: response.status,
+    });
+  });
+
+  /** EMPLOYEE LOGIN */
+  employeeLogin = catchAsync(async (req: Request, res: Response) => {
+    const { email, password } = req.body;
+
+    const response = await this.authService.employeeLogin({ email, password });
+
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
+      statusCode: response.status,
+    });
+  });
+
+  /** GET CURRENT USER */
+  getCurrentUser = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user!;
+    
+    return ApiResponse.success({
+      res,
+      message: "User fetched successfully",
+      data: user,
+      statusCode: 200,
+    });
+  });
+
+  /** GET PARTNER PROFILE */
+  getPartnerProfile = catchAsync(async (req: Request, res: Response) => {
+    const partnerId = req.user?.id;
+    
+    const response = await this.authService.getPartnerProfile(partnerId);
+    
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
+      statusCode: response.status,
+    });
+  });
+
+  /** GET EMPLOYEE PROFILE */
+  getEmployeeProfile = catchAsync(async (req: Request, res: Response) => {
+    const employeeId = req.user?.id;
+    
+    const response = await this.authService.getEmployeeProfile(employeeId);
+    
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
+      statusCode: response.status,
+    });
+  });
+}
