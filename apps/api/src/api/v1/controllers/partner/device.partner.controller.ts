@@ -152,4 +152,14 @@ export default class DeviceController {
       statusCode: response.status,
     });
   });
+
+  generateQRCode = catchAsync(async (req: Request, res: Response) => {
+    const response = await this.deviceService.generateQRCode(req.params.id as string);
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
+      statusCode: response.status,
+    });
+  });
 }

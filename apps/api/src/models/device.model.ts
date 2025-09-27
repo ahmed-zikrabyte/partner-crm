@@ -33,6 +33,7 @@ export interface IDevice {
   box: string;
   warranty: string;
   issues: string;
+  qrCodeUrl?: string;
   isActive?: boolean;
   isDeleted?: boolean;
   createdAt?: Date;
@@ -94,6 +95,7 @@ const deviceSchema = new mongoose.Schema<IDevice>(
     box: { type: String, trim: true },
     warranty: { type: String, trim: true },
     issues: { type: String, trim: true },
+    qrCodeUrl: { type: String, trim: true },
     isActive: { type: Boolean, default: true },
     isDeleted: { type: Boolean, default: false },
   },

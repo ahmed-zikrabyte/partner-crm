@@ -23,7 +23,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { getVendorById } from "@/services/vendorService";
 import { getAllDevices } from "@/services/deviceService";
 import { getAllTransactions } from "@/services/transactionService";
-import { AddTransactionDialog } from "@/components/shared/add-transaction-dialog";
+import { AddTransactionDialog } from "@/components/global/add-transaction-dialog";
 import type { VendorData } from "@/components/vendor/vendor.schema";
 import { toast } from "sonner";
 
@@ -175,7 +175,10 @@ export default function VendorDetailsPage({
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <h1 className="text-2xl font-bold">Vendor Details</h1>
-        <Button onClick={() => setTransactionDialogOpen(true)} className="ml-auto">
+        <Button
+          onClick={() => setTransactionDialogOpen(true)}
+          className="ml-auto"
+        >
           <IndianRupee className="w-4 h-4 mr-2" />
           Add Transaction
         </Button>
@@ -215,10 +218,12 @@ export default function VendorDetailsPage({
       {/* Tabs for Transactions and Devices */}
       <Tabs defaultValue="transactions" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="transactions">Transactions ({transactions.length})</TabsTrigger>
+          <TabsTrigger value="transactions">
+            Transactions ({transactions.length})
+          </TabsTrigger>
           <TabsTrigger value="devices">Devices ({totalDevices})</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="transactions">
           <Card>
             <CardHeader>
@@ -239,7 +244,7 @@ export default function VendorDetailsPage({
             </CardContent>
           </Card>
         </TabsContent>
-        
+
         <TabsContent value="devices">
           <Card>
             <CardHeader>

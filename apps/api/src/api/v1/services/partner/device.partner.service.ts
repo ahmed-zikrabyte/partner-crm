@@ -6,6 +6,7 @@ import { getEmptyFields } from "../../../../utils/text.utils";
 import type { ServiceResponse } from "../../../../typings";
 import { VendorModel } from "../../../../models/vendor.model";
 import { EmployeeModel } from "../../../../models/employee.model";
+import { QRCodeUtil } from "../../../../utils/qrcode.util";
 
 export default class DeviceService {
   private deviceModel = DeviceModel;
@@ -103,6 +104,11 @@ export default class DeviceService {
 
       await newDevice.save();
 
+      // Generate QR code for the device
+      const qrCodeDataUrl = await QRCodeUtil.generateDeviceQRCode(newDevice);
+      newDevice.qrCodeUrl = qrCodeDataUrl;
+      await newDevice.save();
+
       // Update vendor balance
       if (selling && vendorId) {
         await VendorModel.findByIdAndUpdate(vendorId, {
@@ -157,6 +163,13 @@ export default class DeviceService {
         { ...cleanUpdateData, updatedAt: new Date() },
         { new: true, runValidators: true }
       );
+
+      // Regenerate QR code with updated data
+      if (device) {
+        const qrCodeDataUrl = await QRCodeUtil.generateDeviceQRCode(device);
+        device.qrCodeUrl = qrCodeDataUrl;
+        await device.save();
+      }
 
       // Update vendor balance - only for first-time addition since UI disables fields after first edit
       const newVendorId = cleanUpdateData.vendorId;
@@ -465,6 +478,26 @@ export default class DeviceService {
       return {
         data: employees,
         message: "Employees fetched successfully",
+        status: HTTP.OK,
+        success: true,
+      };
+    } catch (error) {
+      throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async generateQRCode(id: string): Promise<ServiceResponse> {
+    try {
+      const device = await this.deviceModel.findById(id);
+      if (!device) throw new AppError("Device not found", HTTP.NOT_FOUND);
+
+      const qrCodeDataUrl = await QRCodeUtil.generateDeviceQRCode(device);
+      device.qrCodeUrl = qrCodeDataUrl;
+      await device.save();
+
+      return {
+        data: { qrCodeUrl: qrCodeDataUrl },
+        message: "QR code generated successfully",
         status: HTTP.OK,
         success: true,
       };

@@ -19,6 +19,7 @@ import {
   Building2,
   ShoppingCart,
   Clock,
+  IndianRupee,
   Smartphone,
   User,
 } from "lucide-react";
@@ -85,7 +86,7 @@ export function AppSidebar() {
         { title: "Employee", url: "/employee", icon: Users },
         { title: "Device", url: "/device", icon: Smartphone },
         { title: "Attendance", url: "/attendance", icon: Clock },
-        // { title: "Cashbook", url: "/cashbook", icon: Clock },
+        { title: "Cashbook", url: "/cashbook", icon: IndianRupee },
         { title: "Profile", url: "/profile", icon: User },
       ];
     }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import { useState } from "react";
 import { Button } from "@workspace/ui/components/button";
@@ -78,7 +77,7 @@ export function AddTransactionDialog({
       };
 
       await createTransaction(payload);
-      
+
 
       toast.success("Transaction created successfully");
       onOpenChange(false);
@@ -105,7 +104,7 @@ export function AddTransactionDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label htmlFor="type">Transaction Type</Label>
+            <Label className="mb-3" htmlFor="type">Transaction Type</Label>
             <Select
               value={form.type}
               onValueChange={(value: "return" | "sell") =>
@@ -122,7 +121,7 @@ export function AddTransactionDialog({
             </Select>
           </div>
           <div>
-            <Label htmlFor="paymentMode">Payment Mode</Label>
+            <Label className="mb-3" htmlFor="paymentMode">Payment Mode</Label>
             <Select
               value={form.paymentMode}
               onValueChange={(value: "upi" | "card" | "cash") =>
@@ -140,7 +139,7 @@ export function AddTransactionDialog({
             </Select>
           </div>
           <div>
-            <Label htmlFor="amount">Amount</Label>
+            <Label className="mb-3" htmlFor="amount">Amount</Label>
             <Input
               id="amount"
               type="number"
@@ -155,10 +154,10 @@ export function AddTransactionDialog({
             />
           </div>
           <div>
-            <Label htmlFor="note">Note</Label>
+            <Label className="mb-3" htmlFor="note">Note</Label>
             <Textarea
               id="note"
-              placeholder="Enter note (optional)"
+              placeholder="Enter note"
               value={form.note}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, note: e.target.value }))

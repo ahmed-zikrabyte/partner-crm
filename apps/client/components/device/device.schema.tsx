@@ -38,6 +38,7 @@ export interface DeviceData extends Omit<DeviceFormData, 'selectedCompanyIds'> {
   partnerId: string;
   deviceId: string;
   selectedCompanyIds?: string;
+  qrCodeUrl?: string;
   isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
