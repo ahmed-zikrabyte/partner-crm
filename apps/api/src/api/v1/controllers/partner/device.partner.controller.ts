@@ -32,9 +32,18 @@ export default class DeviceController {
   });
 
   getAll = catchAsync(async (req: Request, res: Response) => {
-    const { page = "1", limit = "10", vendorId, companyIds, isActive, search } = req.query;
+    const { page = "1", limit = "10", vendorId, companyIds, isActive, search, filter } = req.query;
     const user = req.user!;
     const partnerId = user.role === "partner" ? user._id : user.partnerId;
+
+    let parsedFilter;
+    if (filter && typeof filter === 'string') {
+      try {
+        parsedFilter = JSON.parse(filter);
+      } catch (e) {
+        parsedFilter = undefined;
+      }
+    }
 
     const response = await this.deviceService.getAll(
       Number(page),
@@ -43,7 +52,8 @@ export default class DeviceController {
       vendorId as string,
       companyIds as string,
       isActive === "true" ? true : isActive === "false" ? false : undefined,
-      search as string | undefined
+      search as string | undefined,
+      parsedFilter
     );
 
     return ApiResponse.success({
@@ -99,6 +109,56 @@ export default class DeviceController {
     return ApiResponse.success({
       res,
       ...response,
+      statusCode: response.status,
+    });
+  });
+
+  exportSoldDevices = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user!;
+    const partnerId = user.role === "partner" ? user._id : user.partnerId;
+    const { vendorId, companyIds, pickedBy } = req.query;
+
+    const filters = {
+      ...(vendorId && { vendorId }),
+      ...(companyIds && { companyIds }),
+      ...(pickedBy && { pickedBy })
+    };
+
+    const response = await this.deviceService.exportSoldDevices(partnerId as string, filters);
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
+      statusCode: response.status,
+    });
+  });
+
+  exportNewDevices = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user!;
+    const partnerId = user.role === "partner" ? user._id : user.partnerId;
+    const { vendorId, companyIds, pickedBy } = req.query;
+
+    const filters = {
+      ...(vendorId && { vendorId }),
+      ...(companyIds && { companyIds }),
+      ...(pickedBy && { pickedBy })
+    };
+
+    const response = await this.deviceService.exportNewDevices(partnerId as string, filters);
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
+      statusCode: response.status,
+    });
+  });
+
+  generateQRCode = catchAsync(async (req: Request, res: Response) => {
+    const response = await this.deviceService.generateQRCode(req.params.id as string);
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
       statusCode: response.status,
     });
   });

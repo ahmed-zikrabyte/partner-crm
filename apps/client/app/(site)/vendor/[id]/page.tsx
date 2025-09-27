@@ -2,7 +2,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, DollarSign } from "lucide-react";
+import { ArrowLeft, IndianRupee } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
   Card,
@@ -12,22 +12,7 @@ import {
 } from "@workspace/ui/components/card";
 import { Badge } from "@workspace/ui/components/badge";
 import { DataTable } from "@workspace/ui/components/data-table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@workspace/ui/components/dialog";
-import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
-import { Textarea } from "@workspace/ui/components/textarea";
+
 import {
   Tabs,
   TabsContent,
@@ -37,10 +22,8 @@ import {
 import type { ColumnDef } from "@tanstack/react-table";
 import { getVendorById } from "@/services/vendorService";
 import { getAllDevices } from "@/services/deviceService";
-import {
-  createTransaction,
-  getAllTransactions,
-} from "@/services/transactionService";
+import { getAllTransactions } from "@/services/transactionService";
+import { AddTransactionDialog } from "@/components/global/add-transaction-dialog";
 import type { VendorData } from "@/components/vendor/vendor.schema";
 import { toast } from "sonner";
 
@@ -67,18 +50,14 @@ export default function VendorDetailsPage({
   const [devices, setDevices] = useState<DeviceData[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [captureAmountOpen, setCaptureAmountOpen] = useState(false);
-  const [captureForm, setCaptureForm] = useState({
-    paymentMode: "cash" as "upi" | "card" | "cash",
-    amount: "",
-    note: "",
-    type: "sell" as "return" | "sell",
-  });
+  const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
+  const [vendorId, setVendorId] = useState<string>("");
 
   useEffect(() => {
     const fetchVendorDetails = async () => {
       try {
         const resolvedParams = await params;
+        setVendorId(resolvedParams.id);
         const [vendorRes, devicesRes, transactionsRes] = await Promise.all([
           getVendorById(resolvedParams.id),
           getAllDevices({ vendorId: resolvedParams.id, limit: 0 }),
@@ -196,8 +175,11 @@ export default function VendorDetailsPage({
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <h1 className="text-2xl font-bold">Vendor Details</h1>
-        <Button onClick={() => setCaptureAmountOpen(true)} className="ml-auto">
-          <DollarSign className="w-4 h-4 mr-2" />
+        <Button
+          onClick={() => setTransactionDialogOpen(true)}
+          className="ml-auto"
+        >
+          <IndianRupee className="w-4 h-4 mr-2" />
           Add Transaction
         </Button>
       </div>
@@ -236,10 +218,12 @@ export default function VendorDetailsPage({
       {/* Tabs for Transactions and Devices */}
       <Tabs defaultValue="transactions" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="transactions">Transactions ({transactions.length})</TabsTrigger>
+          <TabsTrigger value="transactions">
+            Transactions ({transactions.length})
+          </TabsTrigger>
           <TabsTrigger value="devices">Devices ({totalDevices})</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="transactions">
           <Card>
             <CardHeader>
@@ -260,7 +244,7 @@ export default function VendorDetailsPage({
             </CardContent>
           </Card>
         </TabsContent>
-        
+
         <TabsContent value="devices">
           <Card>
             <CardHeader>
@@ -283,134 +267,20 @@ export default function VendorDetailsPage({
         </TabsContent>
       </Tabs>
 
-      {/* Add Transaction Modal */}
-      <Dialog open={captureAmountOpen} onOpenChange={setCaptureAmountOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Transaction</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="type">Transaction Type</Label>
-              <Select
-                value={captureForm.type}
-                onValueChange={(value: "return" | "sell") =>
-                  setCaptureForm((prev) => ({ ...prev, type: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sell">Sell</SelectItem>
-                  <SelectItem value="return">Return</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="paymentMode">Payment Mode</Label>
-              <Select
-                value={captureForm.paymentMode}
-                onValueChange={(value: "upi" | "card" | "cash") =>
-                  setCaptureForm((prev) => ({ ...prev, paymentMode: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="upi">UPI</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="amount">Amount</Label>
-              <Input
-                id="amount"
-                type="number"
-                placeholder="Enter amount"
-                value={captureForm.amount}
-                onChange={(e) =>
-                  setCaptureForm((prev) => ({
-                    ...prev,
-                    amount: e.target.value,
-                  }))
-                }
-              />
-            </div>
-            <div>
-              <Label htmlFor="note">Note</Label>
-              <Textarea
-                id="note"
-                placeholder="Enter note (optional)"
-                value={captureForm.note}
-                onChange={(e) =>
-                  setCaptureForm((prev) => ({ ...prev, note: e.target.value }))
-                }
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setCaptureAmountOpen(false);
-                  setCaptureForm({
-                    paymentMode: "cash",
-                    amount: "",
-                    note: "",
-                    type: "sell",
-                  });
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={async () => {
-                  try {
-                    if (!captureForm.amount) {
-                      toast.error("Please enter amount");
-                      return;
-                    }
-
-                    const resolvedParams = await params;
-                    await createTransaction({
-                      vendorId: resolvedParams.id,
-                      amount: parseFloat(captureForm.amount),
-                      paymentMode: captureForm.paymentMode,
-                      type: captureForm.type,
-                      note: captureForm.note,
-                    });
-
-                    toast.success("Transaction created successfully");
-                    setCaptureAmountOpen(false);
-                    setCaptureForm({
-                      paymentMode: "cash",
-                      amount: "",
-                      note: "",
-                      type: "sell",
-                    });
-
-                    // Refresh vendor and transactions data
-                    const [vendorRes, transactionsRes] = await Promise.all([
-                      getVendorById(resolvedParams.id),
-                      getAllTransactions({ vendorId: resolvedParams.id }),
-                    ]);
-                    setVendor(vendorRes.data);
-                    setTransactions(transactionsRes.data || []);
-                  } catch (error) {
-                    console.error(error);
-                    toast.error("Failed to create transaction");
-                  }
-                }}
-              >
-                Create Transaction
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AddTransactionDialog
+        open={transactionDialogOpen}
+        onOpenChange={setTransactionDialogOpen}
+        entityId={vendorId}
+        entityType="vendor"
+        onSuccess={async () => {
+          const [vendorRes, transactionsRes] = await Promise.all([
+            getVendorById(vendorId),
+            getAllTransactions({ vendorId: vendorId }),
+          ]);
+          setVendor(vendorRes.data);
+          setTransactions(transactionsRes.data || []);
+        }}
+      />
     </div>
   );
 }

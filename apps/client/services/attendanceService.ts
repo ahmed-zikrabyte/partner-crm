@@ -18,6 +18,7 @@ export interface Employee {
   _id: string;
   name: string;
   email: string;
+  phone: string;
 }
 
 export const attendanceService = {
@@ -43,6 +44,13 @@ export const attendanceService = {
 
   getAllEmployeesAttendance: async (date: string) => {
     const response = await axiosInstance.get(`/partner/attendance/all?date=${date}`);
+    return response.data;
+  },
+
+  getBulkAttendance: async (startDate: string, endDate: string) => {
+    const response = await axiosInstance.get(
+      `/partner/attendance/bulk?startDate=${startDate}&endDate=${endDate}`
+    );
     return response.data;
   },
 

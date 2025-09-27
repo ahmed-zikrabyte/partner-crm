@@ -24,6 +24,11 @@ attendanceRouter.get("/all", (req, res, next) =>
   attendanceController.getAllEmployeesAttendance(req, res)
 );
 
+// Get bulk attendance for date range
+attendanceRouter.get("/bulk", (req, res, next) =>
+  attendanceController.getBulkAttendance(req, res)
+);
+
 // Export attendance to Excel with date filtering
 attendanceRouter.get("/export", (req, res, next) =>
   attendanceController.exportAttendanceToExcel(req, res)

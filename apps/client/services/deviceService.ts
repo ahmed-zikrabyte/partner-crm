@@ -46,6 +46,9 @@ export const getAllDevices = async ({
   isActive,
   companyIds,
   vendorId,
+  pickedBy,
+  deviceType,
+  filter,
 }: {
   search?: string;
   page?: number;
@@ -53,10 +56,26 @@ export const getAllDevices = async ({
   isActive?: boolean;
   companyIds?: string;
   vendorId?: string;
+  pickedBy?: string;
+  deviceType?: 'sold' | 'new';
+  filter?: any;
 } = {}) => {
   try {
+    const params: any = { search, page, limit, isActive, companyIds, vendorId, pickedBy };
+    
+    // Build filter object
+    const filterObj: any = { ...filter };
+    if (deviceType) filterObj.deviceType = deviceType;
+    if (pickedBy) filterObj.pickedBy = pickedBy;
+    if (companyIds) filterObj.companyIds = companyIds;
+    if (vendorId) filterObj.vendorId = vendorId;
+    
+    if (Object.keys(filterObj).length > 0) {
+      params.filter = JSON.stringify(filterObj);
+    }
+    
     const response = await axiosInstance.get("/partner/devices", {
-      params: { search, page, limit, isActive, companyIds, vendorId },
+      params,
     });
     return response.data;
   } catch (error) {
@@ -68,7 +87,9 @@ export const getAllDevices = async ({
 // ✅ Get device by ID
 export const getDeviceById = async (id: string) => {
   try {
-    const response = await axiosInstance.get(`/partner/devices/${id}`);
+    const response = await axiosInstance.get(`/partner/devices/${id}`, {
+      params: { populate: true }
+    });
     return response.data;
   } catch (error) {
     console.error(`Error fetching device ${id}:`, error);
@@ -119,6 +140,58 @@ export const getEmployeesForPartner = async () => {
     return response.data;
   } catch (error) {
     console.error("Error fetching employees:", error);
+    throw error;
+  }
+};
+
+// ✅ Export sold devices
+export const exportSoldDevices = async ({
+  vendorId,
+  companyIds,
+  pickedBy,
+}: {
+  vendorId?: string;
+  companyIds?: string;
+  pickedBy?: string;
+} = {}) => {
+  try {
+    const params: any = {};
+    if (vendorId) params.vendorId = vendorId;
+    if (companyIds) params.companyIds = companyIds;
+    if (pickedBy) params.pickedBy = pickedBy;
+    
+    const response = await axiosInstance.get("/partner/devices/export/sold", {
+      params,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error exporting sold devices:", error);
+    throw error;
+  }
+};
+
+// ✅ Export new devices
+export const exportNewDevices = async ({
+  vendorId,
+  companyIds,
+  pickedBy,
+}: {
+  vendorId?: string;
+  companyIds?: string;
+  pickedBy?: string;
+} = {}) => {
+  try {
+    const params: any = {};
+    if (vendorId) params.vendorId = vendorId;
+    if (companyIds) params.companyIds = companyIds;
+    if (pickedBy) params.pickedBy = pickedBy;
+    
+    const response = await axiosInstance.get("/partner/devices/export/new", {
+      params,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error exporting new devices:", error);
     throw error;
   }
 };

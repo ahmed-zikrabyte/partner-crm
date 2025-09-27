@@ -53,8 +53,8 @@ export const ENV = {
     apiPrefix: process.env.API_PREFIX || "/api",
     apiVersion: process.env.API_VERSION || "v1",
     companyName: process.env.COMPANY_NAME || "Partner CRM",
-    adminUrl: process.env.ADMIN_URL || "http://localhost:3000",
-    partnerUrl: process.env.PARTNER_URL || "http://localhost:3001",
+    adminUrl: process.env.ADMIN_URL || "http://localhost:2001",
+    partnerUrl: process.env.PARTNER_URL || "http://localhost:2000",
   },
   db: {
     mongoUri: process.env.MONGO_URI || "mongodb://localhost:27017/chilldeli",
