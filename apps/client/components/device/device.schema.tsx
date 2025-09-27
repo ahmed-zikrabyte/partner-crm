@@ -2,7 +2,7 @@ import * as z from "zod";
 
 // ✅ Schema for creating a device
 export const createDeviceSchema = z.object({
-  vendorId: z.string().min(1, "Vendor is required"),
+  vendorId: z.string().optional(),
   companyIds: z.string().min(1, "Company is required"),
   selectedCompanyIds: z.string().min(1, "Company ID is required"),
   date: z.string().min(1, "Date is required"),
@@ -19,11 +19,12 @@ export const createDeviceSchema = z.object({
   commission: z.number().nonnegative("Commission must be positive").optional().default(0),
   gst: z.number().nonnegative("GST must be positive").optional().default(0),
   totalCost: z.number().nonnegative("Total Cost must be positive").optional().default(0),
-  selling: z.number().nonnegative("Selling price must be positive").min(0.01, "Selling price is required"),
-  profit: z.number().default(0),
+  selling: z.number().nonnegative("Selling price must be positive").optional(),
+  profit: z.number().optional(),
   pickedBy: z.string().min(1, "Picked By is required"),
   box: z.string().min(1, "Box is required"),
   warranty: z.string().min(1, "Warranty is required"),
+  issues: z.string().min(1, "Issues is required"),
   isActive: z.boolean().default(true).optional(),
 });
 
@@ -37,6 +38,7 @@ export interface DeviceData extends Omit<DeviceFormData, 'selectedCompanyIds'> {
   partnerId: string;
   deviceId: string;
   selectedCompanyIds?: string;
+  qrCodeUrl?: string;
   isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
