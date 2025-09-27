@@ -120,6 +120,44 @@ export default class AttendanceController {
     }
   };
 
+  // Get bulk attendance
+  getBulkAttendance = async (req: Request, res: Response) => {
+    try {
+      const partnerId = req.user?.id;
+      if (!partnerId) {
+        throw new AppError("Partner ID is required", HTTP.UNAUTHORIZED);
+      }
+
+      const { startDate, endDate } = req.query;
+      if (!startDate || !endDate) {
+        throw new AppError("Start date and end date are required", HTTP.BAD_REQUEST);
+      }
+
+      const result = await this.attendanceService.getBulkAttendance(
+        partnerId,
+        startDate as string,
+        endDate as string
+      );
+
+      res.status(result.status).json(result);
+    } catch (error) {
+      console.error("Error in get bulk attendance:", error);
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({
+          success: false,
+          message: error.message,
+          status: error.statusCode,
+        });
+      } else {
+        res.status(HTTP.INTERNAL_SERVER_ERROR).json({
+          success: false,
+          message: "Internal server error",
+          status: HTTP.INTERNAL_SERVER_ERROR,
+        });
+      }
+    }
+  };
+
   // Export attendance to Excel
   exportAttendanceToExcel = async (req: Request, res: Response) => {
     try {

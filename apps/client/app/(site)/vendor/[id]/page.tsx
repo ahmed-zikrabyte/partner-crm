@@ -2,7 +2,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, DollarSign } from "lucide-react";
+import { ArrowLeft, DollarSign, IndianRupee } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
   Card,
@@ -197,7 +197,7 @@ export default function VendorDetailsPage({
         </Button>
         <h1 className="text-2xl font-bold">Vendor Details</h1>
         <Button onClick={() => setCaptureAmountOpen(true)} className="ml-auto">
-          <DollarSign className="w-4 h-4 mr-2" />
+          <IndianRupee className="w-4 h-4 mr-2" />
           Add Transaction
         </Button>
       </div>

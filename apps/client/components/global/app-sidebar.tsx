@@ -84,8 +84,8 @@ export function AppSidebar() {
         { title: "Company", url: "/company", icon: Building2 },
         { title: "Vendor", url: "/vendor", icon: ShoppingCart },
         { title: "Employee", url: "/employee", icon: Users },
-        { title: "Attendance", url: "/attendance", icon: Clock },
         { title: "Device", url: "/device", icon: Smartphone },
+        { title: "Attendance", url: "/attendance", icon: Clock },
         { title: "Profile", url: "/profile", icon: User },
       ];
     }

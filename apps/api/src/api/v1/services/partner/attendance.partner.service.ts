@@ -33,7 +33,7 @@ export default class AttendancePartnerService {
         );
       }
 
-      const attendanceDate = new Date(date + 'T00:00:00.000Z');
+      const attendanceDate = new Date(date + "T00:00:00.000Z");
 
       // Update or create attendance
       const attendance = await this.attendanceModel.findOneAndUpdate(
@@ -104,7 +104,7 @@ export default class AttendancePartnerService {
     date: string
   ): Promise<ServiceResponse> {
     try {
-      const attendanceDate = new Date(date + 'T00:00:00.000Z');
+      const attendanceDate = new Date(date + "T00:00:00.000Z");
 
       const employees = await this.employeeModel
         .find({
@@ -123,6 +123,36 @@ export default class AttendancePartnerService {
       return {
         message: "All employees attendance retrieved successfully",
         data: { employees, attendance },
+        status: HTTP.OK,
+        success: true,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async getBulkAttendance(
+    partnerId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<ServiceResponse> {
+    try {
+      const query: any = { partnerId };
+      if (startDate || endDate) {
+        query.date = {};
+        if (startDate) query.date.$gte = new Date(startDate);
+        if (endDate) query.date.$lte = new Date(endDate);
+      }
+
+      const attendance = await this.attendanceModel
+        .find(query)
+        .populate("employeeId", "name email")
+        .sort({ date: 1, employeeId: 1 });
+
+      return {
+        message: "Bulk attendance retrieved successfully",
+        data: attendance,
         status: HTTP.OK,
         success: true,
       };
@@ -203,13 +233,13 @@ export default class AttendancePartnerService {
 
         // Add attendance status for each date
         dateRange.forEach((date) => {
-          const attendanceRecord = attendance.find(
-            (record: any) => {
-              const recordDateStr = record.date.toISOString().substring(0, 10);
-              return record.employeeId.toString() === employee._id.toString() &&
-                recordDateStr === date;
-            }
-          );
+          const attendanceRecord = attendance.find((record: any) => {
+            const recordDateStr = record.date.toISOString().substring(0, 10);
+            return (
+              record.employeeId.toString() === employee._id.toString() &&
+              recordDateStr === date
+            );
+          });
           row[date] = attendanceRecord ? attendanceRecord.status : "Not Marked";
         });
 
