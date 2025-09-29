@@ -411,36 +411,43 @@ export default class DeviceService {
         return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
       };
 
-      const exportData = devices.map((device) => ({
-        "Device ID": device.deviceId,
-        Company: (device.companyIds as any)?.name || "N/A",
-        "Company ID": (device.companyIds as any)?._id || "N/A",
-        "Service Number": device.serviceNumber || "N/A",
-        Brand: device.brand,
-        Model: device.model,
-        Box: device.box || "N/A",
-        Warranty: device.warranty || "N/A",
-        Issues: device.issues || "N/A",
-        "IMEI 1": device.imei1,
-        "IMEI 2": device.imei2 || "N/A",
-        "Initial Cost": device.initialCost || 0,
-        Cost: device.cost || 0,
-        "Extra Amount": device.extraAmount || 0,
-        Credits: device.credit || 0,
-        "Per Credit Value": device.perCredit || 0,
-        Commission: device.commission || 0,
-        GST: device.gst || 0,
-        "Total Cost": device.totalCost || 0,
-        "Sold To": device.sellHistory?.find((h) => h.type === "sell")?.vendor
-          ? (device.sellHistory.find((h) => h.type === "sell")?.vendor as any)
-              ?.name
-          : "N/A",
-        "Selling Price":
-          device.sellHistory?.find((h) => h.type === "sell")?.selling || 0,
-        Profit: device.profit || 0,
-        "Picked By": (device.pickedBy as any)?.name || "N/A",
-        "Picked Date": formatDate(device.date),
-      }));
+      const exportData = devices.map((device) => {
+        const latestTransaction = device.sellHistory && device.sellHistory.length > 0 
+          ? device.sellHistory[device.sellHistory.length - 1] 
+          : null;
+        
+        return {
+          "Device ID": device.deviceId,
+          "Company": (device.companyIds as any)?.name || "N/A",
+          "Company ID": device.selectedCompanyIds || "N/A",
+          "Service Number": device.serviceNumber || "N/A",
+          Brand: device.brand,
+          Model: device.model,
+          Box: device.box || "N/A",
+          Warranty: device.warranty || "N/A",
+          Issues: device.issues || "N/A",
+          "IMEI 1": device.imei1,
+          "IMEI 2": device.imei2 || "N/A",
+          "Initial Cost": device.initialCost || 0,
+          Cost: device.cost || 0,
+          "Extra Amount": device.extraAmount || 0,
+          Credits: device.credit || 0,
+          "Per Credit Value": device.perCredit || 0,
+          Commission: device.commission || 0,
+          GST: device.gst || 0,
+          "Total Cost": device.totalCost || 0,
+          "Latest Vendor": latestTransaction?.vendor
+            ? (latestTransaction.vendor as any)?.name
+            : "N/A",
+          "Latest Amount": latestTransaction?.type === "sell" 
+            ? latestTransaction.selling || 0
+            : latestTransaction?.returnAmount || 0,
+          "Status": latestTransaction?.type || "New",
+          Profit: device.profit || 0,
+          "Picked By": (device.pickedBy as any)?.name || "N/A",
+          "Picked Date": formatDate(device.date),
+        };
+      });
 
       return {
         data: exportData,
@@ -483,8 +490,8 @@ export default class DeviceService {
 
       const exportData = devices.map((device) => ({
         "Device ID": device.deviceId,
-        Company: (device.companyIds as any)?.name || "N/A",
-        "Company ID": (device.companyIds as any)?._id || "N/A",
+        "Company": (device.companyIds as any)?.name || "N/A",
+        "Company ID": device.selectedCompanyIds || "N/A",
         "Service Number": device.serviceNumber || "N/A",
         Brand: device.brand,
         Model: device.model,
@@ -503,10 +510,7 @@ export default class DeviceService {
         "Total Cost": device.totalCost || 0,
         "Picked By": (device.pickedBy as any)?.name || "N/A",
         "Picked Date": formatDate(device.date),
-        "Sold To": device.sellHistory?.find((h) => h.type === "sell")?.vendor
-          ? (device.sellHistory.find((h) => h.type === "sell")?.vendor as any)
-              ?.name
-          : "N/A",
+        "Status": "New",
       }));
 
       return {
@@ -528,11 +532,12 @@ export default class DeviceService {
       const query: Record<string, any> = {
         isDeleted: false,
         partnerId,
-        sellHistory: {
-          $exists: true,
-          $ne: [],
-          $elemMatch: { type: "return" }
-        },
+        $expr: {
+          $and: [
+            { $gt: [{ $size: { $ifNull: ["$sellHistory", []] } }, 0] },
+            { $eq: [{ $arrayElemAt: ["$sellHistory.type", -1] }, "return"] }
+          ]
+        }
       };
 
       if (filters?.companyIds) query.companyIds = filters.companyIds;
@@ -553,13 +558,14 @@ export default class DeviceService {
       };
 
       const exportData = devices.map((device) => {
-        const returnHistory = device.sellHistory?.find((h) => h.type === "return");
-        const sellHistory = device.sellHistory?.find((h) => h.type === "sell");
+        const latestTransaction = device.sellHistory && device.sellHistory.length > 0 
+          ? device.sellHistory[device.sellHistory.length - 1] 
+          : null;
         
         return {
           "Device ID": device.deviceId,
-          Company: (device.companyIds as any)?.name || "N/A",
-          "Company ID": (device.companyIds as any)?._id || "N/A",
+          "Company": (device.companyIds as any)?.name || "N/A",
+          "Company ID": device.selectedCompanyIds || "N/A",
           "Service Number": device.serviceNumber || "N/A",
           Brand: device.brand,
           Model: device.model,
@@ -576,15 +582,14 @@ export default class DeviceService {
           Commission: device.commission || 0,
           GST: device.gst || 0,
           "Total Cost": device.totalCost || 0,
-          "Originally Sold To": sellHistory?.vendor
-            ? (sellHistory.vendor as any)?.name
+          "Latest Vendor": latestTransaction?.vendor
+            ? (latestTransaction.vendor as any)?.name
             : "N/A",
-          "Original Selling Price": sellHistory?.selling || 0,
-          "Returned From": returnHistory?.vendor
-            ? (returnHistory.vendor as any)?.name
-            : "N/A",
-          "Return Amount": returnHistory?.returnAmount || 0,
-          "Return Date": formatDate(returnHistory?.createdAt || ""),
+          "Latest Amount": latestTransaction?.type === "sell" 
+            ? latestTransaction.selling || 0
+            : latestTransaction?.returnAmount || 0,
+          "Latest Date": formatDate(latestTransaction?.createdAt || ""),
+          "Status": "Return",
           "Current Profit/Loss": device.profit || 0,
           "Picked By": (device.pickedBy as any)?.name || "N/A",
           "Picked Date": formatDate(device.date),

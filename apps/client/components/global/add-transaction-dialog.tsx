@@ -25,7 +25,7 @@ interface TransactionForm {
   paymentMode: "upi" | "card" | "cash";
   amount: string;
   note: string;
-  type: "return" | "sell";
+  type: "return" | "sell" | "credit" | "debit";
   deviceId?: string;
 }
 
@@ -33,7 +33,7 @@ interface AddTransactionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   entityId: string;
-  entityType: "vendor" | "device";
+  entityType: "vendor" | "device" | "partner"; // partner added for internal
   onSuccess?: () => void;
 }
 
@@ -59,10 +59,16 @@ export function AddTransactionDialog({
       paymentMode: "cash",
       amount: "",
       note: "",
-      type: "sell",
+      type: entityType === "partner" ? "credit" : "sell",
       deviceId: "",
     });
   };
+
+  useEffect(() => {
+    if (entityType === "partner") {
+      setForm(prev => ({ ...prev, type: "credit" }));
+    }
+  }, [entityType]);
 
   useEffect(() => {
     const fetchDevices = async () => {
@@ -82,18 +88,22 @@ export function AddTransactionDialog({
         toast.error("Please select transaction type");
         return;
       }
-      if (!form.paymentMode) {
+
+      if ((form.type === "sell" || form.type === "return") && !form.paymentMode) {
         toast.error("Please select payment mode");
         return;
       }
+
       if (!form.amount || parseFloat(form.amount) <= 0) {
         toast.error("Please enter a valid amount");
         return;
       }
+
       if (!form.note.trim()) {
         toast.error("Please enter a note");
         return;
       }
+
       if (form.type === "return" && !form.deviceId) {
         toast.error("Please select a device for return transaction");
         return;
@@ -101,14 +111,21 @@ export function AddTransactionDialog({
 
       setLoading(true);
 
-      const payload = {
+      const payload: any = {
         amount: parseFloat(form.amount),
-        paymentMode: form.paymentMode,
         type: form.type,
         note: form.note,
-        vendorId: entityType === "vendor" ? entityId : undefined,
-        deviceId: entityType === "device" ? entityId : form.deviceId,
+        date: new Date().toISOString(),
       };
+
+      if (form.type === "sell" || form.type === "return") {
+        payload.paymentMode = form.paymentMode;
+        payload.vendorId = entityType === "vendor" ? entityId : undefined;
+      }
+
+      if (form.type === "return" && (entityType === "device" || form.deviceId)) {
+        payload.deviceId = entityType === "device" ? entityId : form.deviceId;
+      }
 
       await createTransaction(payload);
 
@@ -142,7 +159,7 @@ export function AddTransactionDialog({
             </Label>
             <Select
               value={form.type}
-              onValueChange={(value: "return" | "sell") =>
+              onValueChange={(value: TransactionForm["type"]) =>
                 setForm((prev) => ({ ...prev, type: value }))
               }
             >
@@ -150,11 +167,44 @@ export function AddTransactionDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="sell">Sell</SelectItem>
-                <SelectItem value="return">Return</SelectItem>
+                {entityType === "partner" ? (
+                  <>
+                    <SelectItem value="credit">Credit</SelectItem>
+                    <SelectItem value="debit">Debit</SelectItem>
+                  </>
+                ) : (
+                  <>
+                    <SelectItem value="sell">Sell</SelectItem>
+                    <SelectItem value="return">Return</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
+
+          {(form.type === "return" || form.type === "sell") && (
+            <div>
+              <Label className="mb-3" htmlFor="paymentMode">
+                Payment Mode
+              </Label>
+              <Select
+                value={form.paymentMode}
+                onValueChange={(value: "upi" | "card" | "cash") =>
+                  setForm((prev) => ({ ...prev, paymentMode: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="upi">UPI</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {form.type === "return" && (
             <div>
               <Label className="mb-3" htmlFor="deviceId">
@@ -179,26 +229,7 @@ export function AddTransactionDialog({
               </Select>
             </div>
           )}
-          <div>
-            <Label className="mb-3" htmlFor="paymentMode">
-              Payment Mode
-            </Label>
-            <Select
-              value={form.paymentMode}
-              onValueChange={(value: "upi" | "card" | "cash") =>
-                setForm((prev) => ({ ...prev, paymentMode: value }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="upi">UPI</SelectItem>
-                <SelectItem value="card">Card</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+
           <div>
             <Label className="mb-3" htmlFor="amount">
               Amount
@@ -209,13 +240,11 @@ export function AddTransactionDialog({
               placeholder="Enter amount"
               value={form.amount}
               onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  amount: e.target.value,
-                }))
+                setForm((prev) => ({ ...prev, amount: e.target.value }))
               }
             />
           </div>
+
           <div>
             <Label className="mb-3" htmlFor="note">
               Note
@@ -229,6 +258,7 @@ export function AddTransactionDialog({
               }
             />
           </div>
+
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={handleCancel} disabled={loading}>
               Cancel

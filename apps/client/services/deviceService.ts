@@ -44,7 +44,6 @@ export const getAllDevices = async ({
   limit,
   isActive,
   companyIds,
-  vendorId,
   pickedBy,
   deviceType,
   filter,

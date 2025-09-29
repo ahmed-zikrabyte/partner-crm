@@ -31,13 +31,14 @@ import { Switch } from "@workspace/ui/components/switch";
 
 import { createDevice, updateDevice, getEmployeesForPartner } from "@/services/deviceService";
 import { getAllCompanies, getCompanyById } from "@/services/companyService";
-import { getAllVendors } from "@/services/vendorService";
+import { getAllVendors, createVendor } from "@/services/vendorService";
 import { getCurrentUser } from "@/services/authService";
 import {
   createDeviceSchema,
   updateDeviceSchema,
   DeviceFormData,
 } from "./device.schema";
+import { AddTransactionDialog } from "@/components/global/add-transaction-dialog";
 
 interface DeviceFormProps {
   mode: "create" | "edit" | "view";
@@ -80,6 +81,9 @@ export default function DeviceForm({
   const [companySearch, setCompanySearch] = useState("");
   const [vendorSearch, setVendorSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [showTransactionDialog, setShowTransactionDialog] = useState(false);
+
+  const [filteredVendors, setFilteredVendors] = useState<{ _id: string; name: string }[]>([]);
 
   // Determine device state based on sellHistory
   useEffect(() => {
@@ -172,6 +176,7 @@ export default function DeviceForm({
           getCurrentUser(),
         ]);
         setVendors(vendorRes.data.vendors || []);
+        setFilteredVendors(vendorRes.data.vendors || []);
         setCompanies(companyRes.data.companies || []);
         setEmployees(employeeRes.data || []);
         setCurrentUser(userRes.data);
@@ -186,6 +191,39 @@ export default function DeviceForm({
     }
     fetchData();
   }, []);
+
+  // Filter vendors based on search
+  useEffect(() => {
+    const filtered = vendors.filter((v) => 
+      v.name.toLowerCase().includes(vendorSearch.toLowerCase())
+    );
+    setFilteredVendors(filtered);
+  }, [vendors, vendorSearch]);
+
+  const handleCreateVendor = async () => {
+    if (!vendorSearch.trim()) return;
+    
+    try {
+      const response = await createVendor({ name: vendorSearch.trim() });
+      const newVendor = response.data;
+      setVendors(prev => [...prev, newVendor]);
+      form.setValue("soldTo", newVendor._id);
+      setVendorSearch("");
+      toast.success("Vendor created successfully");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to create vendor");
+    }
+  };
+
+  const handleAddTransaction = () => {
+    const soldTo = form.getValues("soldTo");
+    if (!soldTo) {
+      toast.error("Please select a vendor first");
+      return;
+    }
+    setShowTransactionDialog(true);
+  };
 
   // Initialize perCredit and selectedCompanyIds if company is already selected (edit mode)
   useEffect(() => {
@@ -518,21 +556,33 @@ export default function DeviceForm({
         {/* 11th: Total Cost */}
         {renderDisplayField("totalCost", "Total Cost")}
         
-        {/* 12th: Sold Toggle */}
-        <FormItem className="flex items-center gap-2">
-          <FormLabel>Sold</FormLabel>
-          <Switch
-            checked={isSold}
-            onCheckedChange={(checked) => {
-              setIsSold(checked);
-              if (!checked) {
-                form.setValue("selling", undefined);
-                form.setValue("soldTo", "");
-              }
-            }}
-            disabled={mode === "view"}
-          />
-        </FormItem>
+        {/* 12th: Sold Toggle and Add Transaction */}
+        <div className="flex items-center justify-between">
+          <FormItem className="flex items-center gap-2">
+            <FormLabel>Sold</FormLabel>
+            <Switch
+              checked={isSold}
+              onCheckedChange={(checked) => {
+                setIsSold(checked);
+                if (!checked) {
+                  form.setValue("selling", undefined);
+                  form.setValue("soldTo", "");
+                }
+              }}
+              disabled={mode === "view"}
+            />
+          </FormItem>
+          
+          {mode !== "view" && isSold && (
+            <Button
+              type="button"
+              onClick={handleAddTransaction}
+              disabled={!form.getValues("soldTo") || !form.getValues("selling")}
+            >
+              Add Transaction
+            </Button>
+          )}
+        </div>
 
         {/* Show sold-related fields only when sold toggle is ON */}
         {isSold && (
@@ -563,13 +613,24 @@ export default function DeviceForm({
                             onClick={(e) => e.stopPropagation()}
                           />
                         </div>
-                        {vendors
-                          .filter((v) => v.name.toLowerCase().includes(vendorSearch.toLowerCase()))
-                          .map((v) => (
-                            <SelectItem key={v._id} value={v._id}>
-                              {v.name}
-                            </SelectItem>
-                          ))}
+                        {filteredVendors.map((v) => (
+                          <SelectItem key={v._id} value={v._id}>
+                            {v.name}
+                          </SelectItem>
+                        ))}
+                        {vendorSearch && filteredVendors.length === 0 && (
+                          <div className="p-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={handleCreateVendor}
+                            >
+                              Add "{vendorSearch}" as new vendor
+                            </Button>
+                          </div>
+                        )}
                       </SelectContent>
                     </Select>
                   </FormControl>
@@ -586,6 +647,8 @@ export default function DeviceForm({
               )}
               {renderDisplayField("profit", "Profit/Loss")}
             </div>
+            
+
           </>
         )}
         
@@ -684,6 +747,19 @@ export default function DeviceForm({
           </div>
         )}
       </form>
+      
+      {/* Transaction Dialog */}
+      <AddTransactionDialog
+        open={showTransactionDialog}
+        onOpenChange={setShowTransactionDialog}
+        entityId={form.getValues("soldTo") || ""}
+        entityType="vendor"
+        onSuccess={() => {
+          toast.success("Transaction added successfully");
+        }}
+      />
+      
+
     </Form>
   );
 }

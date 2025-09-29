@@ -14,29 +14,26 @@ export default class TransactionService {
       authorType: "partner" | "employee";
       authorId: string;
     };
-    vendorId: string;
+    vendorId?: string;
     deviceId?: string;
     amount: number;
     note?: string;
-    paymentMode: "upi" | "card" | "cash";
-    type: "return" | "sell";
+    paymentMode?: "upi" | "card" | "cash";
+    type: "return" | "sell" | "credit" | "debit";
     date?: Date;
   }): Promise<ServiceResponse> {
     try {
-      const requiredFields = [
-        "partnerId",
-        "author",
-        "vendorId",
-        "amount",
-        "paymentMode",
-        "type",
-      ];
+      const requiredFields = ["partnerId", "author", "amount", "type"];
+      if ((entry.type === "sell" || entry.type === "return") && !entry.vendorId) {
+        requiredFields.push("vendorId");
+      }
       if (entry.type === "return" && !entry.deviceId) {
         throw new AppError(
           "deviceId is required for return transactions",
           HTTP.BAD_REQUEST
         );
       }
+
       const missingFields = requiredFields.filter(
         (field) => !entry[field as keyof typeof entry]
       );
@@ -53,38 +50,28 @@ export default class TransactionService {
           authorType: entry.author.authorType,
           authorId: new mongoose.Types.ObjectId(entry.author.authorId),
         },
-        vendorId: new mongoose.Types.ObjectId(entry.vendorId),
-        ...(entry.deviceId && {
-          deviceId: new mongoose.Types.ObjectId(entry.deviceId),
-        }),
+        ...(entry.vendorId && { vendorId: new mongoose.Types.ObjectId(entry.vendorId) }),
+        ...(entry.deviceId && { deviceId: new mongoose.Types.ObjectId(entry.deviceId) }),
         amount: entry.amount,
         note: entry.note || "",
-        paymentMode: entry.paymentMode,
+        ...(entry.paymentMode && { paymentMode: entry.paymentMode }),
         type: entry.type,
         date: entry.date || new Date(),
       });
 
       // Handle sell transaction
       if (entry.type === "sell") {
+        if (!entry.vendorId) throw new AppError("vendorId is required for sell", HTTP.BAD_REQUEST);
+
         if (entry.paymentMode === "cash") {
           await Promise.all([
-            VendorModel.findByIdAndUpdate(entry.vendorId, {
-              $inc: { amount: -entry.amount },
-            }),
-            PartnerModel.findByIdAndUpdate(entry.partnerId, {
-              $inc: { cashAmount: entry.amount },
-            }),
+            VendorModel.findByIdAndUpdate(entry.vendorId, { $inc: { amount: -entry.amount } }),
+            PartnerModel.findByIdAndUpdate(entry.partnerId, { $inc: { cashAmount: entry.amount } }),
           ]);
-        } else if (
-          entry.paymentMode === "upi" ||
-          entry.paymentMode === "card"
-        ) {
-          await VendorModel.findByIdAndUpdate(entry.vendorId, {
-            $inc: { amount: -entry.amount },
-          });
+        } else if (entry.paymentMode === "upi" || entry.paymentMode === "card") {
+          await VendorModel.findByIdAndUpdate(entry.vendorId, { $inc: { amount: -entry.amount } });
         }
 
-        // Update device sellHistory
         if (entry.deviceId) {
           await DeviceModel.findByIdAndUpdate(entry.deviceId, {
             $push: {
@@ -101,6 +88,8 @@ export default class TransactionService {
 
       // Handle return transaction
       if (entry.type === "return") {
+        if (!entry.vendorId) throw new AppError("vendorId is required for return", HTTP.BAD_REQUEST);
+
         const vendor = await VendorModel.findById(entry.vendorId);
         const partner = await PartnerModel.findById(entry.partnerId);
 
@@ -109,23 +98,18 @@ export default class TransactionService {
 
         let remainingReturn = entry.amount;
 
-        // 1️⃣ Deduct from vendor owed first
+        // Deduct from vendor owed first
         if (vendor.amount > 0) {
           const deductFromVendor = Math.min(remainingReturn, vendor.amount);
-          await VendorModel.findByIdAndUpdate(entry.vendorId, {
-            $inc: { amount: -deductFromVendor },
-          });
+          await VendorModel.findByIdAndUpdate(entry.vendorId, { $inc: { amount: -deductFromVendor } });
           remainingReturn -= deductFromVendor;
         }
 
-        // 2️⃣ Deduct remaining from partner cash if paymentMode = cash
+        // Deduct remaining from partner cash if cash return
         if (remainingReturn > 0 && entry.paymentMode === "cash") {
-          await PartnerModel.findByIdAndUpdate(entry.partnerId, {
-            $inc: { cashAmount: -remainingReturn },
-          });
+          await PartnerModel.findByIdAndUpdate(entry.partnerId, { $inc: { cashAmount: -remainingReturn } });
         }
 
-        // 3️⃣ Update device sellHistory
         if (entry.deviceId) {
           await DeviceModel.findByIdAndUpdate(entry.deviceId, {
             $push: {
@@ -140,8 +124,15 @@ export default class TransactionService {
         }
       }
 
+      // Handle internal partner transactions (credit/debit)
+      if (entry.type === "credit") {
+        await PartnerModel.findByIdAndUpdate(entry.partnerId, { $inc: { cashAmount: entry.amount } });
+      } else if (entry.type === "debit") {
+        await PartnerModel.findByIdAndUpdate(entry.partnerId, { $inc: { cashAmount: -entry.amount } });
+      }
+
       return {
-        message: `${entry.type === "return" ? "Return" : "Transaction"} created successfully`,
+        message: `${entry.type === "return" || entry.type === "sell" ? entry.type === "return" ? "Return" : "Transaction" : entry.type} created successfully`,
         data: newTransaction,
         status: HTTP.CREATED,
         success: true,
@@ -152,11 +143,7 @@ export default class TransactionService {
     }
   }
 
-  async getAll(
-    partnerId: string,
-    vendorId?: string,
-    type?: "return" | "sell"
-  ): Promise<ServiceResponse> {
+  async getAll(partnerId: string, vendorId?: string, type?: "return" | "sell" | "credit" | "debit"): Promise<ServiceResponse> {
     try {
       const query: any = { partnerId: new mongoose.Types.ObjectId(partnerId) };
       if (vendorId) query.vendorId = new mongoose.Types.ObjectId(vendorId);
@@ -187,9 +174,7 @@ export default class TransactionService {
         .populate("deviceId", "deviceId brand model")
         .populate("author.authorId", "name");
 
-      if (!transaction) {
-        throw new AppError("Transaction not found", HTTP.NOT_FOUND);
-      }
+      if (!transaction) throw new AppError("Transaction not found", HTTP.NOT_FOUND);
 
       return {
         message: "Transaction fetched successfully",
