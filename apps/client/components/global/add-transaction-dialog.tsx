@@ -61,23 +61,36 @@ export function AddTransactionDialog({
 
   const handleSubmit = async () => {
     try {
-      if (!form.amount) {
-        toast.error("Please enter amount");
+      if (!form.type) {
+        toast.error("Please select transaction type");
+        return;
+      }
+      if (!form.paymentMode) {
+        toast.error("Please select payment mode");
+        return;
+      }
+      if (!form.amount || parseFloat(form.amount) <= 0) {
+        toast.error("Please enter a valid amount");
+        return;
+      }
+      if (!form.note.trim()) {
+        toast.error("Please enter a note");
         return;
       }
 
       setLoading(true);
-      
+
       const payload = {
         amount: parseFloat(form.amount),
         paymentMode: form.paymentMode,
         type: form.type,
         note: form.note,
-        ...(entityType === "vendor" ? { vendorId: entityId } : { deviceId: entityId }),
+        ...(entityType === "vendor"
+          ? { vendorId: entityId }
+          : { deviceId: entityId }),
       };
 
       await createTransaction(payload);
-
 
       toast.success("Transaction created successfully");
       onOpenChange(false);
@@ -104,7 +117,9 @@ export function AddTransactionDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label className="mb-3" htmlFor="type">Transaction Type</Label>
+            <Label className="mb-3" htmlFor="type">
+              Transaction Type
+            </Label>
             <Select
               value={form.type}
               onValueChange={(value: "return" | "sell") =>
@@ -121,7 +136,9 @@ export function AddTransactionDialog({
             </Select>
           </div>
           <div>
-            <Label className="mb-3" htmlFor="paymentMode">Payment Mode</Label>
+            <Label className="mb-3" htmlFor="paymentMode">
+              Payment Mode
+            </Label>
             <Select
               value={form.paymentMode}
               onValueChange={(value: "upi" | "card" | "cash") =>
@@ -139,7 +156,9 @@ export function AddTransactionDialog({
             </Select>
           </div>
           <div>
-            <Label className="mb-3" htmlFor="amount">Amount</Label>
+            <Label className="mb-3" htmlFor="amount">
+              Amount
+            </Label>
             <Input
               id="amount"
               type="number"
@@ -154,7 +173,9 @@ export function AddTransactionDialog({
             />
           </div>
           <div>
-            <Label className="mb-3" htmlFor="note">Note</Label>
+            <Label className="mb-3" htmlFor="note">
+              Note
+            </Label>
             <Textarea
               id="note"
               placeholder="Enter note"
