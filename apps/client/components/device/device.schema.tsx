@@ -2,7 +2,6 @@ import * as z from "zod";
 
 // ✅ Schema for creating a device
 export const createDeviceSchema = z.object({
-  vendorId: z.string().optional(),
   companyIds: z.string().min(1, "Company is required"),
   selectedCompanyIds: z.string().min(1, "Company ID is required"),
   date: z.string().min(1, "Date is required"),
@@ -20,6 +19,7 @@ export const createDeviceSchema = z.object({
   gst: z.number().nonnegative("GST must be positive").optional().default(0),
   totalCost: z.number().nonnegative("Total Cost must be positive").optional().default(0),
   selling: z.number().nonnegative("Selling price must be positive").optional(),
+  soldTo: z.string().optional(),
   profit: z.number().optional(),
   pickedBy: z.string().min(1, "Picked By is required"),
   box: z.string().min(1, "Box is required"),
@@ -38,6 +38,15 @@ export interface DeviceData extends Omit<DeviceFormData, 'selectedCompanyIds'> {
   partnerId: string;
   deviceId: string;
   selectedCompanyIds?: string;
+  sellHistory?: {
+    type: "sell" | "return";
+    vendor: { _id: string; name: string };
+    amount?: number;
+    selling?: number;
+    returnAmount?: number;
+    createdAt: string;
+  }[];
+
   qrCodeUrl?: string;
   isDeleted: boolean;
   createdAt: string;

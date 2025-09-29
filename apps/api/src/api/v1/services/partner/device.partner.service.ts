@@ -7,6 +7,7 @@ import type { ServiceResponse } from "../../../../typings";
 import { VendorModel } from "../../../../models/vendor.model";
 import { EmployeeModel } from "../../../../models/employee.model";
 import { QRCodeUtil } from "../../../../utils/qrcode.util";
+import mongoose from "mongoose";
 
 export default class DeviceService {
   private deviceModel = DeviceModel;
@@ -14,7 +15,6 @@ export default class DeviceService {
 
   async create({
     partnerId,
-    vendorId,
     companyIds,
     selectedCompanyIds,
     brand,
@@ -29,7 +29,6 @@ export default class DeviceService {
     commission,
     gst,
     totalCost,
-    selling,
     profit,
     pickedBy,
     date,
@@ -39,18 +38,21 @@ export default class DeviceService {
     issues,
     authorType,
     authorId,
+    selling,
+    soldTo,
   }: Partial<IDevice> & {
     partnerId: string;
-    vendorId?: string;
     companyIds: string;
     brand: string;
     model: string;
     imei1: string;
     authorType: "partner" | "employee";
     authorId: string;
+    selling?: number;
+    soldTo?: string;
   }): Promise<ServiceResponse> {
     try {
-      // Validate required fields (vendorId is now optional)
+      // Validate required fields
       const emptyFields = getEmptyFields({
         partnerId,
         companyIds,
@@ -70,9 +72,8 @@ export default class DeviceService {
       if (!company) throw new AppError("Company not found", HTTP.NOT_FOUND);
 
       // Create the device
-      const newDevice = await this.deviceModel.create({
+      const deviceData: any = {
         partnerId,
-        vendorId,
         companyIds,
         selectedCompanyIds,
         author: {
@@ -91,7 +92,6 @@ export default class DeviceService {
         commission,
         gst,
         totalCost,
-        selling,
         profit,
         date,
         pickedBy,
@@ -100,7 +100,26 @@ export default class DeviceService {
         warranty,
         issues,
         isActive: true,
-      });
+      };
+
+      // Add to sellHistory if selling and soldTo are provided
+      if (selling && soldTo) {
+        deviceData.sellHistory = [
+          {
+            type: "sell" as const,
+            vendor: new mongoose.Types.ObjectId(soldTo),
+            selling: selling,
+            createdAt: new Date(),
+          },
+        ];
+
+        // Add selling amount to vendor's amount
+        await VendorModel.findByIdAndUpdate(soldTo, {
+          $inc: { amount: selling },
+        });
+      }
+
+      const newDevice = await this.deviceModel.create(deviceData);
 
       await newDevice.save();
 
@@ -108,13 +127,6 @@ export default class DeviceService {
       const qrCodeDataUrl = await QRCodeUtil.generateDeviceQRCode(newDevice);
       newDevice.qrCodeUrl = qrCodeDataUrl;
       await newDevice.save();
-
-      // Update vendor balance
-      if (selling && vendorId) {
-        await VendorModel.findByIdAndUpdate(vendorId, {
-          $inc: { amount: selling },
-        });
-      }
 
       return {
         message: "Device created successfully",
@@ -131,24 +143,17 @@ export default class DeviceService {
 
   async update(
     id: string,
-    updateData: Partial<IDevice>
+    updateData: Partial<IDevice> & {
+      selling?: number;
+      soldTo?: string;
+    }
   ): Promise<ServiceResponse> {
     try {
       const oldDevice = await this.deviceModel.findById(id);
       if (!oldDevice) throw new AppError("Device not found", HTTP.NOT_FOUND);
 
-      const oldSelling = oldDevice.selling || 0;
-      const newSelling = updateData.selling || oldSelling;
-
       // Clean updateData to ensure IDs are strings, not objects
       const cleanUpdateData = { ...updateData };
-      if (
-        cleanUpdateData.vendorId &&
-        typeof cleanUpdateData.vendorId === "object"
-      ) {
-        cleanUpdateData.vendorId =
-          (cleanUpdateData.vendorId as any)._id || cleanUpdateData.vendorId;
-      }
       if (
         cleanUpdateData.companyIds &&
         typeof cleanUpdateData.companyIds === "object"
@@ -157,28 +162,69 @@ export default class DeviceService {
           (cleanUpdateData.companyIds as any)._id || cleanUpdateData.companyIds;
       }
 
+      const {
+        selling,
+        soldTo,
+        ...deviceUpdateData
+      } = cleanUpdateData;
+
+      // Handle sell or return based on current device state
+      if (selling && soldTo) {
+        const currentHistory = oldDevice.sellHistory || [];
+        const lastEntry = currentHistory.length > 0 ? currentHistory[currentHistory.length - 1] : null;
+        
+        // Determine if this is a sell or return based on last entry
+        let transactionType: "sell" | "return" = "sell";
+        if (lastEntry?.type === "sell") {
+          transactionType = "return";
+        }
+        
+        const newTransaction = {
+          type: transactionType,
+          vendor: new mongoose.Types.ObjectId(soldTo),
+          ...(transactionType === "sell" ? { selling } : { returnAmount: selling }),
+          createdAt: new Date(),
+        };
+
+        deviceUpdateData.sellHistory = [
+          ...currentHistory,
+          newTransaction,
+        ];
+
+        // Update vendor amount
+        const amountChange = transactionType === "sell" ? selling : -selling;
+        await VendorModel.findByIdAndUpdate(soldTo, {
+          $inc: { amount: amountChange },
+        });
+      }
+
+      // Recalculate running profit
+      let effectiveSelling = 0;
+      let profit = 0;
+      const history =
+        deviceUpdateData.sellHistory || oldDevice.sellHistory || [];
+      for (const h of history) {
+        if (h.type === "sell" && h.selling) {
+          effectiveSelling += h.selling;
+        } else if (h.type === "return" && h.returnAmount) {
+          effectiveSelling -= h.returnAmount;
+        }
+        profit = effectiveSelling - (oldDevice.totalCost || 0);
+      }
+      deviceUpdateData.profit = profit;
+
       // Update the device
       const device = await this.deviceModel.findByIdAndUpdate(
         id,
-        { ...cleanUpdateData, updatedAt: new Date() },
+        { ...deviceUpdateData, updatedAt: new Date() },
         { new: true, runValidators: true }
       );
 
-      // Regenerate QR code with updated data
+      // Regenerate QR code
       if (device) {
         const qrCodeDataUrl = await QRCodeUtil.generateDeviceQRCode(device);
         device.qrCodeUrl = qrCodeDataUrl;
         await device.save();
-      }
-
-      // Update vendor balance - only for first-time addition since UI disables fields after first edit
-      const newVendorId = cleanUpdateData.vendorId;
-
-      // If vendor is being added for the first time (no old vendor but new vendor exists)
-      if (!oldDevice.vendorId && newVendorId && newSelling > 0) {
-        await VendorModel.findByIdAndUpdate(newVendorId, {
-          $inc: { amount: newSelling },
-        });
       }
 
       return {
@@ -198,7 +244,6 @@ export default class DeviceService {
     page: number = 1,
     limit: number = 10,
     partnerId?: string,
-    vendorId?: string,
     companyIds?: string,
     isActive?: boolean,
     search?: string,
@@ -207,25 +252,35 @@ export default class DeviceService {
     try {
       const query: Record<string, any> = { isDeleted: false };
       if (partnerId) query.partnerId = partnerId;
-      if (vendorId) query.vendorId = vendorId;
       if (companyIds) query.companyIds = companyIds;
       if (typeof isActive === "boolean") query.isActive = isActive;
 
       // Enhanced filtering
       if (filter) {
-        if (filter.vendorId === null) {
-          query.vendorId = null;
-        } else if (filter.vendorId && filter.vendorId.$ne !== undefined) {
-          query.vendorId = { $ne: null };
-        } else if (filter.vendorId) {
-          query.vendorId = filter.vendorId;
-        }
-
         if (filter.companyIds) query.companyIds = filter.companyIds;
         if (filter.pickedBy) query.pickedBy = filter.pickedBy;
-        if (filter.deviceType === "sold")
-          query.selling = { $exists: true, $ne: null };
-        if (filter.deviceType === "new") query.selling = { $exists: false };
+        if (filter.deviceType === "new") {
+          query.$or = [
+            { sellHistory: { $exists: false } },
+            { sellHistory: [] },
+          ];
+        }
+        if (filter.deviceType === "sold") {
+          query.$expr = {
+            $and: [
+              { $gt: [{ $size: { $ifNull: ["$sellHistory", []] } }, 0] },
+              { $eq: [{ $arrayElemAt: ["$sellHistory.type", -1] }, "sell"] }
+            ]
+          };
+        }
+        if (filter.deviceType === "return") {
+          query.$expr = {
+            $and: [
+              { $gt: [{ $size: { $ifNull: ["$sellHistory", []] } }, 0] },
+              { $eq: [{ $arrayElemAt: ["$sellHistory.type", -1] }, "return"] }
+            ]
+          };
+        }
       }
 
       if (search)
@@ -242,10 +297,10 @@ export default class DeviceService {
 
       const [devices, total] = await Promise.all([
         fetchQuery
-          .populate("vendorId", "name")
           .populate("companyIds", "name")
           .populate("author.authorId", "name")
-          .populate("pickedBy", "name"),
+          .populate("pickedBy", "name")
+          .populate("sellHistory.vendor", "name"),
         this.deviceModel.countDocuments(query),
       ]);
 
@@ -289,24 +344,18 @@ export default class DeviceService {
       throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
     }
   }
+
   async softDelete(id: string): Promise<ServiceResponse> {
     try {
       const device = await this.deviceModel.findById(id);
       if (!device) throw new AppError("Device not found", HTTP.NOT_FOUND);
-
-      // Deduct the device selling from vendor balance
-      const vendor = await VendorModel.findById(device.vendorId);
-      if (vendor) {
-        vendor.amount = (vendor.amount || 0) - (device.selling || 0);
-        await vendor.save();
-      }
 
       // Soft delete the device
       device.isDeleted = true;
       await device.save();
 
       return {
-        message: "Device deleted successfully and vendor balance updated",
+        message: "Device deleted successfully",
         status: HTTP.OK,
         success: true,
       };
@@ -342,52 +391,55 @@ export default class DeviceService {
       const query: Record<string, any> = {
         isDeleted: false,
         partnerId,
-        selling: { $exists: true, $ne: null },
+        sellHistory: { $exists: true, $ne: [] },
       };
 
-      if (filters?.vendorId) query.vendorId = filters.vendorId;
       if (filters?.companyIds) query.companyIds = filters.companyIds;
       if (filters?.pickedBy) query.pickedBy = filters.pickedBy;
 
       const devices = await this.deviceModel
         .find(query)
-        .populate("vendorId", "name")
         .populate("companyIds", "name")
         .populate("pickedBy", "name")
+        .populate("sellHistory.vendor", "name")
         .sort({ createdAt: -1 });
 
       const formatDate = (dateStr: string | Date) => {
-        if (!dateStr) return 'N/A';
+        if (!dateStr) return "N/A";
         const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return 'N/A';
-        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+        if (isNaN(d.getTime())) return "N/A";
+        return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
       };
 
       const exportData = devices.map((device) => ({
-        'Device ID': device.deviceId,
-        'Company': (device.companyIds as any)?.name || "N/A",
-        'Company ID': (device.companyIds as any)?._id || "N/A",
-        'Service Number': device.serviceNumber || 'N/A',
-        'Brand': device.brand,
-        'Model': device.model,
-        'Box': device.box || 'N/A',
-        'Warranty': device.warranty || 'N/A',
-        'Issues': device.issues || 'N/A',
-        'IMEI 1': device.imei1,
-        'IMEI 2': device.imei2 || 'N/A',
-        'Initial Cost': device.initialCost || 0,
-        'Cost': device.cost || 0,
-        'Extra Amount': device.extraAmount || 0,
-        'Credits': device.credit || 0,
-        'Per Credit Value': device.perCredit || 0,
-        'Commission': device.commission || 0,
-        'GST': device.gst || 0,
-        'Total Cost': device.totalCost || 0,
-        'Sold To': (device.vendorId as any)?.name || "N/A",
-        'Selling Price': device.selling || 0,
-        'Profit': device.profit || 0,
-        'Picked By': (device.pickedBy as any)?.name || "N/A",
-        'Picked Date': formatDate(device.date),
+        "Device ID": device.deviceId,
+        Company: (device.companyIds as any)?.name || "N/A",
+        "Company ID": (device.companyIds as any)?._id || "N/A",
+        "Service Number": device.serviceNumber || "N/A",
+        Brand: device.brand,
+        Model: device.model,
+        Box: device.box || "N/A",
+        Warranty: device.warranty || "N/A",
+        Issues: device.issues || "N/A",
+        "IMEI 1": device.imei1,
+        "IMEI 2": device.imei2 || "N/A",
+        "Initial Cost": device.initialCost || 0,
+        Cost: device.cost || 0,
+        "Extra Amount": device.extraAmount || 0,
+        Credits: device.credit || 0,
+        "Per Credit Value": device.perCredit || 0,
+        Commission: device.commission || 0,
+        GST: device.gst || 0,
+        "Total Cost": device.totalCost || 0,
+        "Sold To": device.sellHistory?.find((h) => h.type === "sell")?.vendor
+          ? (device.sellHistory.find((h) => h.type === "sell")?.vendor as any)
+              ?.name
+          : "N/A",
+        "Selling Price":
+          device.sellHistory?.find((h) => h.type === "sell")?.selling || 0,
+        Profit: device.profit || 0,
+        "Picked By": (device.pickedBy as any)?.name || "N/A",
+        "Picked Date": formatDate(device.date),
       }));
 
       return {
@@ -409,55 +461,139 @@ export default class DeviceService {
       const query: Record<string, any> = {
         isDeleted: false,
         partnerId,
-        $or: [{ selling: { $exists: false } }, { selling: null }],
+        $or: [{ sellHistory: { $exists: false } }, { sellHistory: [] }],
       };
 
-      if (filters?.vendorId) query.vendorId = filters.vendorId;
       if (filters?.companyIds) query.companyIds = filters.companyIds;
       if (filters?.pickedBy) query.pickedBy = filters.pickedBy;
 
       const devices = await this.deviceModel
         .find(query)
-        .populate("vendorId", "name")
         .populate("companyIds", "name")
         .populate("pickedBy", "name")
+        .populate("sellHistory.vendor", "name")
         .sort({ createdAt: -1 });
 
       const formatDate = (dateStr: string | Date) => {
-        if (!dateStr) return 'N/A';
+        if (!dateStr) return "N/A";
         const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return 'N/A';
-        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+        if (isNaN(d.getTime())) return "N/A";
+        return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
       };
 
       const exportData = devices.map((device) => ({
-        'Device ID': device.deviceId,
-        'Company': (device.companyIds as any)?.name || "N/A",
-        'Company ID': (device.companyIds as any)?._id || "N/A",
-        'Service Number': device.serviceNumber || 'N/A',
-        'Brand': device.brand,
-        'Model': device.model,
-        'Box': device.box || 'N/A',
-        'Warranty': device.warranty || 'N/A',
-        'Issues': device.issues || 'N/A',
-        'IMEI 1': device.imei1,
-        'IMEI 2': device.imei2 || 'N/A',
-        'Initial Cost': device.initialCost || 0,
-        'Purchased Cost': device.cost || 0,
-        'Extra Amount': device.extraAmount || 0,
-        'Credits': device.credit || 0,
-        'Per Credit Value': device.perCredit || 0,
-        'Commission': device.commission || 0,
-        'GST': device.gst || 0,
-        'Total Cost': device.totalCost || 0,
-        'Picked By': (device.pickedBy as any)?.name || "N/A",
-        'Picked Date': formatDate(device.date),
-        'Sold To': (device.vendorId as any)?.name || "N/A",
+        "Device ID": device.deviceId,
+        Company: (device.companyIds as any)?.name || "N/A",
+        "Company ID": (device.companyIds as any)?._id || "N/A",
+        "Service Number": device.serviceNumber || "N/A",
+        Brand: device.brand,
+        Model: device.model,
+        Box: device.box || "N/A",
+        Warranty: device.warranty || "N/A",
+        Issues: device.issues || "N/A",
+        "IMEI 1": device.imei1,
+        "IMEI 2": device.imei2 || "N/A",
+        "Initial Cost": device.initialCost || 0,
+        "Purchased Cost": device.cost || 0,
+        "Extra Amount": device.extraAmount || 0,
+        Credits: device.credit || 0,
+        "Per Credit Value": device.perCredit || 0,
+        Commission: device.commission || 0,
+        GST: device.gst || 0,
+        "Total Cost": device.totalCost || 0,
+        "Picked By": (device.pickedBy as any)?.name || "N/A",
+        "Picked Date": formatDate(device.date),
+        "Sold To": device.sellHistory?.find((h) => h.type === "sell")?.vendor
+          ? (device.sellHistory.find((h) => h.type === "sell")?.vendor as any)
+              ?.name
+          : "N/A",
       }));
 
       return {
         data: exportData,
         message: "New devices exported successfully",
+        status: HTTP.OK,
+        success: true,
+      };
+    } catch (error) {
+      throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async exportReturnDevices(
+    partnerId: string,
+    filters?: any
+  ): Promise<ServiceResponse> {
+    try {
+      const query: Record<string, any> = {
+        isDeleted: false,
+        partnerId,
+        sellHistory: {
+          $exists: true,
+          $ne: [],
+          $elemMatch: { type: "return" }
+        },
+      };
+
+      if (filters?.companyIds) query.companyIds = filters.companyIds;
+      if (filters?.pickedBy) query.pickedBy = filters.pickedBy;
+
+      const devices = await this.deviceModel
+        .find(query)
+        .populate("companyIds", "name")
+        .populate("pickedBy", "name")
+        .populate("sellHistory.vendor", "name")
+        .sort({ createdAt: -1 });
+
+      const formatDate = (dateStr: string | Date) => {
+        if (!dateStr) return "N/A";
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "N/A";
+        return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
+      };
+
+      const exportData = devices.map((device) => {
+        const returnHistory = device.sellHistory?.find((h) => h.type === "return");
+        const sellHistory = device.sellHistory?.find((h) => h.type === "sell");
+        
+        return {
+          "Device ID": device.deviceId,
+          Company: (device.companyIds as any)?.name || "N/A",
+          "Company ID": (device.companyIds as any)?._id || "N/A",
+          "Service Number": device.serviceNumber || "N/A",
+          Brand: device.brand,
+          Model: device.model,
+          Box: device.box || "N/A",
+          Warranty: device.warranty || "N/A",
+          Issues: device.issues || "N/A",
+          "IMEI 1": device.imei1,
+          "IMEI 2": device.imei2 || "N/A",
+          "Initial Cost": device.initialCost || 0,
+          "Purchased Cost": device.cost || 0,
+          "Extra Amount": device.extraAmount || 0,
+          Credits: device.credit || 0,
+          "Per Credit Value": device.perCredit || 0,
+          Commission: device.commission || 0,
+          GST: device.gst || 0,
+          "Total Cost": device.totalCost || 0,
+          "Originally Sold To": sellHistory?.vendor
+            ? (sellHistory.vendor as any)?.name
+            : "N/A",
+          "Original Selling Price": sellHistory?.selling || 0,
+          "Returned From": returnHistory?.vendor
+            ? (returnHistory.vendor as any)?.name
+            : "N/A",
+          "Return Amount": returnHistory?.returnAmount || 0,
+          "Return Date": formatDate(returnHistory?.createdAt || ""),
+          "Current Profit/Loss": device.profit || 0,
+          "Picked By": (device.pickedBy as any)?.name || "N/A",
+          "Picked Date": formatDate(device.date),
+        };
+      });
+
+      return {
+        data: exportData,
+        message: "Return devices exported successfully",
         status: HTTP.OK,
         success: true,
       };

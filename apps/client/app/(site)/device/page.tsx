@@ -34,6 +34,7 @@ import {
   deleteDevice,
   exportSoldDevices,
   exportNewDevices,
+  exportReturnDevices,
   getEmployeesForPartner,
 } from "@/services/deviceService";
 import { getAllVendors } from "@/services/vendorService";
@@ -53,7 +54,6 @@ export default function DevicePage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("new");
   const [filters, setFilters] = useState({
-    vendorId: "",
     companyIds: "",
     pickedBy: "",
   });
@@ -72,11 +72,17 @@ export default function DevicePage() {
   // Fetch devices
   const fetchDevices = useCallback(async () => {
     try {
-      const filter: any =
-        activeTab === "new" ? { vendorId: null } : { vendorId: { $ne: null } };
+      let filter: any = {};
+      
+      if (activeTab === "new") {
+        filter.deviceType = "new";
+      } else if (activeTab === "sold") {
+        filter.deviceType = "sold";
+      } else if (activeTab === "return") {
+        filter.deviceType = "return";
+      }
 
       // Add additional filters
-      if (filters.vendorId) filter.vendorId = filters.vendorId;
       if (filters.companyIds) filter.companyIds = filters.companyIds;
       if (filters.pickedBy) filter.pickedBy = filters.pickedBy;
 
@@ -126,7 +132,7 @@ export default function DevicePage() {
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     setPagination((prev) => ({ ...prev, currentPage: 1 }));
-    setFilters({ vendorId: "", companyIds: "", pickedBy: "" });
+    setFilters({ companyIds: "", pickedBy: "" });
   };
 
   const handleFilterChange = (key: string, value: string) => {
@@ -138,15 +144,18 @@ export default function DevicePage() {
   const handleExport = async () => {
     try {
       const exportFilters = {
-        ...(filters.vendorId && { vendorId: filters.vendorId }),
         ...(filters.companyIds && { companyIds: filters.companyIds }),
         ...(filters.pickedBy && { pickedBy: filters.pickedBy }),
       };
 
-      const response =
-        activeTab === "new"
-          ? await exportNewDevices(exportFilters)
-          : await exportSoldDevices(exportFilters);
+      let response;
+      if (activeTab === "new") {
+        response = await exportNewDevices(exportFilters);
+      } else if (activeTab === "sold") {
+        response = await exportSoldDevices(exportFilters);
+      } else if (activeTab === "return") {
+        response = await exportReturnDevices(exportFilters);
+      }
 
       // Create and download CSV
       const csvContent = convertToCSV(response.data);
@@ -247,11 +256,17 @@ export default function DevicePage() {
       header: "Model",
     },
     {
-      accessorKey: "vendorId",
-      header: "Sold To",
+      accessorKey: "sellHistory",
+      header: activeTab === "return" ? "Returned From" : "Sold To",
       cell: ({ row }) => {
-        const vendor = row.original.vendorId as any;
-        return vendor?.name || vendor || "-";
+        const sellHistory = row.original.sellHistory;
+        if (activeTab === "return") {
+          const lastReturn = sellHistory?.find(h => h.type === 'return');
+          return lastReturn?.vendor?.name || "-";
+        } else {
+          const lastSell = sellHistory?.find(h => h.type === 'sell');
+          return lastSell?.vendor?.name || "-";
+        }
       },
     },
     {
@@ -270,6 +285,37 @@ export default function DevicePage() {
         return pickedBy?.name || pickedBy || "-";
       },
     },
+    ...(activeTab === "sold" ? [{
+      accessorKey: "sellHistory",
+      header: "Selling Amount",
+      cell: ({ row }: { row: any }) => {
+        const sellHistory = row.original.sellHistory;
+        const lastSell = sellHistory?.find((h: any) => h.type === 'sell');
+        return lastSell?.selling || lastSell?.amount || "-";
+      },
+    }, {
+      accessorKey: "profit",
+      header: "Profit/Loss",
+      cell: ({ row }: { row: any }) => {
+        const profit = row.original.profit;
+        if (profit === undefined || profit === null) return "-";
+        const isProfit = profit >= 0;
+        return (
+          <span className={isProfit ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+            {isProfit ? "+" : ""}{profit}
+          </span>
+        );
+      },
+    }] : []),
+    ...(activeTab === "return" ? [{
+      accessorKey: "sellHistory",
+      header: "Return Amount",
+      cell: ({ row }: { row: any }) => {
+        const sellHistory = row.original.sellHistory;
+        const lastReturn = sellHistory?.find((h: any) => h.type === 'return');
+        return lastReturn?.returnAmount || lastReturn?.amount || "-";
+      },
+    }] : []),
     {
       accessorKey: "actions",
       header: "Actions",
@@ -337,24 +383,7 @@ export default function DevicePage() {
                 onChange={(e) => handleSearch(e.target.value)}
                 className="w-64"
               />
-              <Select
-                value={filters.vendorId || undefined}
-                onValueChange={(value) =>
-                  handleFilterChange("vendorId", value || "")
-                }
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="All Vendors" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Vendors</SelectItem>
-                  {vendors.map((vendor: any) => (
-                    <SelectItem key={vendor._id} value={vendor._id}>
-                      {vendor.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
               <Select
                 value={filters.companyIds || undefined}
                 onValueChange={(value) =>
@@ -394,7 +423,7 @@ export default function DevicePage() {
             </div>
             <Button onClick={handleExport}>
               <Download className="w-4 h-4 mr-2" />
-              Export {activeTab === "new" ? "New" : "Sold"}
+              Export {activeTab === "new" ? "New" : activeTab === "sold" ? "Sold" : "Return"}
             </Button>
           </div>
         </div>
@@ -404,6 +433,7 @@ export default function DevicePage() {
         <TabsList>
           <TabsTrigger value="new">New Devices</TabsTrigger>
           <TabsTrigger value="sold">Sold Devices</TabsTrigger>
+          <TabsTrigger value="return">Return Devices</TabsTrigger>
         </TabsList>
         <TabsContent value={activeTab}>
           <DataTable

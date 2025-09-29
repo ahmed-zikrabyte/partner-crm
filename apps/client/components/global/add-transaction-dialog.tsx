@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@workspace/ui/components/button";
 import {
   Dialog,
@@ -18,6 +18,7 @@ import {
 } from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { createTransaction } from "@/services/transactionService";
+import { getAllDevices } from "@/services/deviceService";
 import { toast } from "sonner";
 
 interface TransactionForm {
@@ -25,6 +26,7 @@ interface TransactionForm {
   amount: string;
   note: string;
   type: "return" | "sell";
+  deviceId?: string;
 }
 
 interface AddTransactionDialogProps {
@@ -47,8 +49,10 @@ export function AddTransactionDialog({
     amount: "",
     note: "",
     type: "sell",
+    deviceId: "",
   });
   const [loading, setLoading] = useState(false);
+  const [devices, setDevices] = useState<any[]>([]);
 
   const resetForm = () => {
     setForm({
@@ -56,8 +60,21 @@ export function AddTransactionDialog({
       amount: "",
       note: "",
       type: "sell",
+      deviceId: "",
     });
   };
+
+  useEffect(() => {
+    const fetchDevices = async () => {
+      try {
+        const response = await getAllDevices({ limit: 0 });
+        setDevices(response.data.devices || []);
+      } catch (error) {
+        console.error("Error fetching devices:", error);
+      }
+    };
+    fetchDevices();
+  }, []);
 
   const handleSubmit = async () => {
     try {
@@ -77,6 +94,10 @@ export function AddTransactionDialog({
         toast.error("Please enter a note");
         return;
       }
+      if (form.type === "return" && !form.deviceId) {
+        toast.error("Please select a device for return transaction");
+        return;
+      }
 
       setLoading(true);
 
@@ -85,9 +106,8 @@ export function AddTransactionDialog({
         paymentMode: form.paymentMode,
         type: form.type,
         note: form.note,
-        ...(entityType === "vendor"
-          ? { vendorId: entityId }
-          : { deviceId: entityId }),
+        vendorId: entityType === "vendor" ? entityId : undefined,
+        deviceId: entityType === "device" ? entityId : form.deviceId,
       };
 
       await createTransaction(payload);
@@ -135,6 +155,30 @@ export function AddTransactionDialog({
               </SelectContent>
             </Select>
           </div>
+          {form.type === "return" && (
+            <div>
+              <Label className="mb-3" htmlFor="deviceId">
+                Device
+              </Label>
+              <Select
+                value={form.deviceId}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, deviceId: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Device" />
+                </SelectTrigger>
+                <SelectContent>
+                  {devices.map((device) => (
+                    <SelectItem key={device._id} value={device._id}>
+                      {device.deviceId} - {device.brand} {device.model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <Label className="mb-3" htmlFor="paymentMode">
               Payment Mode

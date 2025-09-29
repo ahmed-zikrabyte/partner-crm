@@ -7,6 +7,7 @@ export interface ITransaction {
     authorId: mongoose.Types.ObjectId;
   };
   vendorId: mongoose.Types.ObjectId;
+  deviceId?: mongoose.Types.ObjectId;
   amount: number;
   note: string;
   paymentMode: "upi" | "card" | "cash";
@@ -37,6 +38,13 @@ const transactionSchema = new mongoose.Schema<ITransaction>(
       type: mongoose.Schema.Types.ObjectId,
       ref: "vendor",
       required: true,
+    },
+    deviceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "device",
+      required: function() {
+        return this.type === "return";
+      },
     },
     amount: { type: Number, required: true },
     note: { type: String, trim: true },

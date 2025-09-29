@@ -166,7 +166,7 @@ export default function DeviceDetailsPage() {
                   </DialogContent>
                 </Dialog>
               )}
-              {device.vendorId && (
+              {device.sellHistory && device.sellHistory.length > 0 && (
                 <Button onClick={() => setTransactionDialogOpen(true)}>
                   <IndianRupee className="w-4 h-4 mr-2" />
                   Add Transaction
@@ -316,12 +316,37 @@ export default function DeviceDetailsPage() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">
-                        Sold To
+                        Current Status
                       </label>
                       <p className="text-base font-semibold text-gray-900 mt-1 capitalize">
-                        {device.vendorId
-                          ? getVendorName(device.vendorId as string)
-                          : "-"}
+                        {(() => {
+                          if (!device.sellHistory || device.sellHistory.length === 0) return "New";
+                          const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+                          if (!lastEntry) return "New";
+                          return lastEntry.type === "sell" ? "Sold" : "Returned";
+                        })()}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">
+                        Latest Vendor
+                      </label>
+                      <p className="text-base font-semibold text-gray-900 mt-1 capitalize">
+                        {(() => {
+                          if (!device.sellHistory || device.sellHistory.length === 0) return "-";
+                          const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+                          if (!lastEntry) return "-";
+                          const vendorId = typeof lastEntry.vendor === 'object' ? lastEntry.vendor._id : lastEntry.vendor;
+                          return getVendorName(vendorId);
+                        })()}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">
+                        Return Count
+                      </label>
+                      <p className="text-base font-semibold text-gray-900 mt-1">
+                        {device.sellHistory?.filter(h => h.type === 'return').length || 0}
                       </p>
                     </div>
                   </div>
@@ -401,16 +426,30 @@ export default function DeviceDetailsPage() {
                       ₹{device.totalCost}
                     </p>
                   </div>
-                  {device.selling && (
-                    <div className="bg-emerald-50 p-3 rounded-lg">
-                      <label className="text-xs font-medium text-emerald-600 uppercase tracking-wide">
-                        Selling Price
-                      </label>
-                      <p className="text-lg font-semibold text-emerald-900 mt-1">
-                        ₹{device.selling}
-                      </p>
-                    </div>
-                  )}
+                  {(() => {
+                    if (!device.sellHistory || device.sellHistory.length === 0) return null;
+                    const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+                    if (!lastEntry) return null;
+                    const amount = lastEntry.selling || lastEntry.returnAmount || lastEntry.amount;
+                    if (!amount) return null;
+                    
+                    return (
+                      <div className={`p-3 rounded-lg ${
+                        lastEntry.type === 'sell' ? 'bg-emerald-50' : 'bg-red-50'
+                      }`}>
+                        <label className={`text-xs font-medium uppercase tracking-wide ${
+                          lastEntry.type === 'sell' ? 'text-emerald-600' : 'text-red-600'
+                        }`}>
+                          {lastEntry.type === 'sell' ? 'Latest Selling Price' : 'Latest Return Amount'}
+                        </label>
+                        <p className={`text-lg font-semibold mt-1 ${
+                          lastEntry.type === 'sell' ? 'text-emerald-900' : 'text-red-900'
+                        }`}>
+                          ₹{amount}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   {device.profit !== undefined && (
                     <div
                       className={`p-3 rounded-lg ${device.profit >= 0 ? "bg-green-50 border-2 border-green-200" : "bg-red-50 border-2 border-red-200"}`}
@@ -431,6 +470,50 @@ export default function DeviceDetailsPage() {
               </CardContent>
             </Card>
 
+            {device.sellHistory && device.sellHistory.length > 0 && (
+              <Card className="bg-white shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold text-gray-900">
+                    Transaction History
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {device.sellHistory.map((transaction, index) => (
+                      <div key={index} className={`p-4 rounded-lg border-l-4 ${
+                        transaction.type === 'sell' 
+                          ? 'bg-green-50 border-green-400' 
+                          : 'bg-red-50 border-red-400'
+                      }`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant={transaction.type === 'sell' ? 'default' : 'destructive'}>
+                                {transaction.type === 'sell' ? 'SOLD' : 'RETURNED'}
+                              </Badge>
+                              <span className="text-sm text-gray-500">
+                                {new Date(transaction.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <p className="font-medium text-gray-900">
+                              {transaction.type === 'sell' ? 'Sold to' : 'Returned from'}: {getVendorName(typeof transaction.vendor === 'object' ? transaction.vendor._id : transaction.vendor)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-lg font-bold ${
+                              transaction.type === 'sell' ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              ₹{transaction.selling || transaction.returnAmount || transaction.amount || 0}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {device.issues && (
               <Card className="bg-white shadow-sm">
                 <CardHeader className="">
@@ -449,11 +532,15 @@ export default function DeviceDetailsPage() {
         </div>
       </div>
 
-      {device.vendorId && (
+      {device.sellHistory && device.sellHistory.length > 0 && (
         <AddTransactionDialog
           open={transactionDialogOpen}
           onOpenChange={setTransactionDialogOpen}
-          entityId={device.vendorId as string}
+          entityId={(() => {
+            const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+            if (!lastEntry) return '';
+            return typeof lastEntry.vendor === 'object' ? lastEntry.vendor._id : lastEntry.vendor || '';
+          })()}
           entityType="vendor"
           onSuccess={() => {
             toast.success("Transaction recorded for vendor");

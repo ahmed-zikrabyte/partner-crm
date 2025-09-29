@@ -6,7 +6,6 @@ const nanoid = customAlphabet("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", 8);
 export interface IDevice {
   deviceId?: string;
   partnerId: mongoose.Types.ObjectId;
-  vendorId?: mongoose.Types.ObjectId;
   companyIds: mongoose.Types.ObjectId;
   selectedCompanyIds?: string;
   author: {
@@ -28,8 +27,14 @@ export interface IDevice {
   commission: number;
   gst: number;
   totalCost: number;
-  selling?: number;
   profit?: number;
+  sellHistory: {
+    type: "sell" | "return";
+    vendor: mongoose.Types.ObjectId;
+    selling?: number; 
+    returnAmount?: number;
+    createdAt: Date;
+  }[];
   box: string;
   warranty: string;
   issues: string;
@@ -40,6 +45,41 @@ export interface IDevice {
   updatedAt?: Date;
 }
 
+const sellHistorySchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ["sell", "return"],
+      required: true,
+    },
+    vendor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "vendor",
+      required: true,
+    },
+    selling: {
+      type: Number,
+      validate: {
+        validator: function (this: any, v: number) {
+          return this.type !== "sell" || v !== undefined;
+        },
+        message: "selling is required for type 'sell'",
+      },
+    },
+    returnAmount: {
+      type: Number,
+      validate: {
+        validator: function (this: any, v: number) {
+          return this.type !== "return" || v !== undefined;
+        },
+        message: "returnAmount is required for type 'return'",
+      },
+    },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const deviceSchema = new mongoose.Schema<IDevice>(
   {
     deviceId: { type: String, unique: true, trim: true },
@@ -47,11 +87,6 @@ const deviceSchema = new mongoose.Schema<IDevice>(
       type: mongoose.Schema.Types.ObjectId,
       ref: "partner",
       required: true,
-    },
-    vendorId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "vendor",
-      required: false,
     },
     companyIds: {
       type: mongoose.Schema.Types.ObjectId,
@@ -90,8 +125,8 @@ const deviceSchema = new mongoose.Schema<IDevice>(
     commission: { type: Number, default: 0 },
     gst: { type: Number, default: 0 },
     totalCost: { type: Number, default: 0 },
-    selling: { type: Number },
     profit: { type: Number },
+    sellHistory: [sellHistorySchema],
     box: { type: String, trim: true },
     warranty: { type: String, trim: true },
     issues: { type: String, trim: true },

@@ -8,7 +8,7 @@ export default class TransactionController {
 
   create = catchAsync(async (req: Request, res: Response) => {
     const partnerId = req.user!._id;
-    const { vendorId, amount, note, paymentMode, type, date } = req.body;
+    const { vendorId, deviceId, amount, note, paymentMode, type, date } = req.body;
     
     const response = await this.transactionService.create({
       partnerId,
@@ -17,6 +17,7 @@ export default class TransactionController {
         authorId: partnerId,
       },
       vendorId,
+      deviceId,
       amount,
       note,
       paymentMode,

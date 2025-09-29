@@ -60,12 +60,19 @@ export default function VendorDetailsPage({
         setVendorId(resolvedParams.id);
         const [vendorRes, devicesRes, transactionsRes] = await Promise.all([
           getVendorById(resolvedParams.id),
-          getAllDevices({ vendorId: resolvedParams.id, limit: 0 }),
+          getAllDevices({ limit: 0 }),
           getAllTransactions({ vendorId: resolvedParams.id }),
         ]);
 
+        // Filter devices that have been sold to this vendor
+        const vendorDevices = devicesRes.data.devices?.filter((device: any) => 
+          device.sellHistory?.some((history: any) => 
+            history.type === 'sell' && history.vendor?._id === resolvedParams.id
+          )
+        ) || [];
+
         setVendor(vendorRes.data);
-        setDevices(devicesRes.data.devices || []);
+        setDevices(vendorDevices);
         setTransactions(transactionsRes.data || []);
       } catch (err: any) {
         console.error(err);
@@ -97,8 +104,22 @@ export default function VendorDetailsPage({
     },
     {
       accessorKey: "selling",
-      header: "Selling Price",
-      cell: ({ row }) => `₹${row.original.selling || 0}`,
+      header: "Latest Selling Price",
+      cell: ({ row }) => {
+        const device = row.original as any;
+        const sellHistory = device.sellHistory?.filter((h: any) => h.type === 'sell') || [];
+        const latestSell = sellHistory.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+        return `₹${latestSell?.amount || device.selling || 0}`;
+      },
+    },
+    {
+      accessorKey: "returns",
+      header: "Returns",
+      cell: ({ row }) => {
+        const device = row.original as any;
+        const returnCount = device.sellHistory?.filter((h: any) => h.type === 'return').length || 0;
+        return returnCount;
+      },
     },
     {
       accessorKey: "isActive",

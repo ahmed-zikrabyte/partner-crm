@@ -1,7 +1,7 @@
 import axiosInstance from "@/lib/axios";
 
 export interface TransactionPayload {
-  vendorId?: string;
+  vendorId: string;
   deviceId?: string;
   amount: number;
   note?: string;

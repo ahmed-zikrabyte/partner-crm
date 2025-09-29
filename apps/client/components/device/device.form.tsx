@@ -42,7 +42,16 @@ import {
 interface DeviceFormProps {
   mode: "create" | "edit" | "view";
   deviceId?: string;
-  defaultValues?: Partial<DeviceFormData>;
+  defaultValues?: Partial<DeviceFormData> & {
+    sellHistory?: {
+      type: "sell" | "return";
+      vendor: { _id: string; name: string };
+      selling?: number;
+      returnAmount?: number;
+      amount?: number;
+      createdAt: string;
+    }[];
+  };
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -56,6 +65,7 @@ export default function DeviceForm({
 }: DeviceFormProps) {
   const router = useRouter();
 
+
   const [vendors, setVendors] = useState<{ _id: string; name: string }[]>([]);
   const [companies, setCompanies] = useState<
     { _id: string; name: string; creditValue: number; companyIds?: string[] }[]
@@ -65,21 +75,27 @@ export default function DeviceForm({
   const [perCredit, setPerCredit] = useState<number | undefined>(undefined);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
   const [isSold, setIsSold] = useState(false);
+  const [deviceState, setDeviceState] = useState<"new" | "sold" | "return">("new");
   const [hasPreviouslySoldData, setHasPreviouslySoldData] = useState(false);
   const [companySearch, setCompanySearch] = useState("");
   const [vendorSearch, setVendorSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
 
-  // Check if device has sold data and update toggle accordingly
+  // Determine device state based on sellHistory
   useEffect(() => {
-    const vendorId = form.getValues("vendorId");
-    const selling = form.getValues("selling");
-    if (vendorId || selling) {
-      setIsSold(true);
-      // If in edit mode and has existing sold data, mark as previously set
-      if (mode === "edit" && defaultValues && (defaultValues.vendorId || defaultValues.selling)) {
+    if (defaultValues?.sellHistory && defaultValues.sellHistory.length > 0) {
+      const lastEntry = defaultValues.sellHistory[defaultValues.sellHistory.length - 1];
+      if (lastEntry?.type === "sell") {
+        setDeviceState("sold");
+        setIsSold(true);
         setHasPreviouslySoldData(true);
+      } else if (lastEntry?.type === "return") {
+        setDeviceState("return");
+        setIsSold(true);
       }
+    } else {
+      setDeviceState("new");
+      setIsSold(false);
     }
   }, [defaultValues, mode]);
 
@@ -90,9 +106,9 @@ export default function DeviceForm({
     defaultValues: (() => {
       if (!defaultValues) {
         return {
-          vendorId: "",
           companyIds: "",
           selectedCompanyIds: "",
+          soldTo: "",
           date: new Date().toISOString().split('T')[0],
           serviceNumber: "",
           brand: "",
@@ -109,6 +125,8 @@ export default function DeviceForm({
           totalCost: undefined,
           selling: undefined,
           profit: undefined,
+
+
           pickedBy: "",
           box: "no",
           warranty: "",
@@ -119,14 +137,25 @@ export default function DeviceForm({
       
       // Normalize object IDs to strings
       const normalized = { ...defaultValues };
-      if (normalized.vendorId && typeof normalized.vendorId === 'object') {
-        normalized.vendorId = (normalized.vendorId as any)._id || '';
-      }
       if (normalized.companyIds && typeof normalized.companyIds === 'object') {
         normalized.companyIds = (normalized.companyIds as any)._id || '';
       }
       if (normalized.pickedBy && typeof normalized.pickedBy === 'object') {
         normalized.pickedBy = (normalized.pickedBy as any)._id || '';
+      }
+      // Extract vendor from sellHistory for edit mode
+      if ((normalized as any).sellHistory && (normalized as any).sellHistory.length > 0) {
+        const lastEntry = (normalized as any).sellHistory[(normalized as any).sellHistory.length - 1];
+        
+        if (lastEntry) {
+          normalized.soldTo = typeof lastEntry.vendor === 'object' ? lastEntry.vendor._id : lastEntry.vendor;
+          
+          if (lastEntry.type === 'sell') {
+            normalized.selling = lastEntry.selling || lastEntry.amount;
+          } else if (lastEntry.type === 'return') {
+            normalized.selling = lastEntry.returnAmount || lastEntry.amount;
+          }
+        }
       }
       return normalized;
     })(),
@@ -237,16 +266,8 @@ export default function DeviceForm({
     try {
       // Clean data to ensure IDs are strings, not objects
       const cleanData = { ...data };
-      if (cleanData.vendorId && typeof cleanData.vendorId === 'object') {
-        cleanData.vendorId = cleanData.vendorId._id || cleanData.vendorId;
-      }
       if (cleanData.companyIds && typeof cleanData.companyIds === 'object') {
         cleanData.companyIds = cleanData.companyIds._id || cleanData.companyIds;
-      }
-      
-      // Remove empty vendorId to avoid ObjectId cast error
-      if (!cleanData.vendorId || cleanData.vendorId === "") {
-        delete cleanData.vendorId;
       }
       
       console.log('Form data being submitted:', cleanData);
@@ -505,8 +526,8 @@ export default function DeviceForm({
             onCheckedChange={(checked) => {
               setIsSold(checked);
               if (!checked) {
-                form.setValue("vendorId", "");
                 form.setValue("selling", undefined);
+                form.setValue("soldTo", "");
               }
             }}
             disabled={mode === "view"}
@@ -518,15 +539,15 @@ export default function DeviceForm({
           <>
             <FormField
               control={form.control}
-              name="vendorId"
+              name="soldTo"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Sold To</FormLabel>
                   <FormControl>
                     <Select
-                      value={typeof field.value === 'object' && field.value ? (field.value as any)._id : field.value}
+                      value={field.value}
                       onValueChange={field.onChange}
-                      disabled={mode === "view" || hasPreviouslySoldData}
+                      disabled={mode === "view" || (deviceState === "sold" && hasPreviouslySoldData)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select Vendor" />
@@ -557,7 +578,12 @@ export default function DeviceForm({
               )}
             />
             <div className="grid grid-cols-2 gap-4">
-              {renderInputField("selling", "Selling Cost", "number", hasPreviouslySoldData || mode === "view")}
+              {renderInputField(
+                "selling", 
+                "Selling Cost", 
+                "number", 
+                mode === "view"
+              )}
               {renderDisplayField("profit", "Profit/Loss")}
             </div>
           </>
