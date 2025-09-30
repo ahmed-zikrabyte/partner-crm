@@ -27,13 +27,19 @@ export const createTransaction = async (payload: TransactionPayload) => {
 export const getAllTransactions = async ({
   vendorId,
   type,
+  search,
+  startDate,
+  endDate,
 }: {
   vendorId?: string;
   type?: TransactionType;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
 } = {}) => {
   try {
     const response = await axiosInstance.get("/partner/transaction", {
-      params: { vendorId, type },
+      params: { vendorId, type, search, startDate, endDate },
     });
     return response.data;
   } catch (error) {
@@ -49,6 +55,29 @@ export const getTransactionById = async (id: string) => {
     return response.data;
   } catch (error) {
     console.error("Error fetching transaction:", error);
+    throw error;
+  }
+};
+
+// Export transactions
+export const exportTransactions = async ({
+  vendorId,
+  type,
+  startDate,
+  endDate,
+}: {
+  vendorId?: string;
+  type?: TransactionType;
+  startDate?: string;
+  endDate?: string;
+} = {}) => {
+  try {
+    const response = await axiosInstance.get("/partner/transaction/export/all", {
+      params: { vendorId, type, startDate, endDate },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error exporting transactions:", error);
     throw error;
   }
 };

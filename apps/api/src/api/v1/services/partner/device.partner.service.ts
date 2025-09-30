@@ -6,7 +6,7 @@ import { getEmptyFields } from "../../../../utils/text.utils";
 import type { ServiceResponse } from "../../../../typings";
 import { VendorModel } from "../../../../models/vendor.model";
 import { EmployeeModel } from "../../../../models/employee.model";
-import { QRCodeUtil } from "../../../../utils/qrcode.util";
+
 import mongoose from "mongoose";
 
 export default class DeviceService {
@@ -123,11 +123,6 @@ export default class DeviceService {
 
       await newDevice.save();
 
-      // Generate QR code for the device
-      const qrCodeDataUrl = await QRCodeUtil.generateDeviceQRCode(newDevice);
-      newDevice.qrCodeUrl = qrCodeDataUrl;
-      await newDevice.save();
-
       return {
         message: "Device created successfully",
         data: newDevice,
@@ -220,12 +215,7 @@ export default class DeviceService {
         { new: true, runValidators: true }
       );
 
-      // Regenerate QR code
-      if (device) {
-        const qrCodeDataUrl = await QRCodeUtil.generateDeviceQRCode(device);
-        device.qrCodeUrl = qrCodeDataUrl;
-        await device.save();
-      }
+
 
       return {
         message: "Device updated successfully",
@@ -259,6 +249,21 @@ export default class DeviceService {
       if (filter) {
         if (filter.companyIds) query.companyIds = filter.companyIds;
         if (filter.pickedBy) query.pickedBy = filter.pickedBy;
+        
+        // Date filtering
+        if (filter.startDate || filter.endDate) {
+          const dateQuery: any = {};
+          if (filter.startDate) {
+            dateQuery.$gte = new Date(filter.startDate);
+          }
+          if (filter.endDate) {
+            const endDate = new Date(filter.endDate);
+            endDate.setHours(23, 59, 59, 999);
+            dateQuery.$lte = endDate;
+          }
+          query.date = dateQuery;
+        }
+        
         if (filter.deviceType === "new") {
           query.$or = [
             { sellHistory: { $exists: false } },
@@ -396,6 +401,20 @@ export default class DeviceService {
 
       if (filters?.companyIds) query.companyIds = filters.companyIds;
       if (filters?.pickedBy) query.pickedBy = filters.pickedBy;
+      
+      // Date filtering
+      if (filters?.startDate || filters?.endDate) {
+        const dateQuery: any = {};
+        if (filters.startDate) {
+          dateQuery.$gte = new Date(filters.startDate);
+        }
+        if (filters.endDate) {
+          const endDate = new Date(filters.endDate);
+          endDate.setHours(23, 59, 59, 999);
+          dateQuery.$lte = endDate;
+        }
+        query.date = dateQuery;
+      }
 
       const devices = await this.deviceModel
         .find(query)
@@ -473,6 +492,20 @@ export default class DeviceService {
 
       if (filters?.companyIds) query.companyIds = filters.companyIds;
       if (filters?.pickedBy) query.pickedBy = filters.pickedBy;
+      
+      // Date filtering
+      if (filters?.startDate || filters?.endDate) {
+        const dateQuery: any = {};
+        if (filters.startDate) {
+          dateQuery.$gte = new Date(filters.startDate);
+        }
+        if (filters.endDate) {
+          const endDate = new Date(filters.endDate);
+          endDate.setHours(23, 59, 59, 999);
+          dateQuery.$lte = endDate;
+        }
+        query.date = dateQuery;
+      }
 
       const devices = await this.deviceModel
         .find(query)
@@ -542,6 +575,20 @@ export default class DeviceService {
 
       if (filters?.companyIds) query.companyIds = filters.companyIds;
       if (filters?.pickedBy) query.pickedBy = filters.pickedBy;
+      
+      // Date filtering
+      if (filters?.startDate || filters?.endDate) {
+        const dateQuery: any = {};
+        if (filters.startDate) {
+          dateQuery.$gte = new Date(filters.startDate);
+        }
+        if (filters.endDate) {
+          const endDate = new Date(filters.endDate);
+          endDate.setHours(23, 59, 59, 999);
+          dateQuery.$lte = endDate;
+        }
+        query.date = dateQuery;
+      }
 
       const devices = await this.deviceModel
         .find(query)
@@ -627,23 +674,5 @@ export default class DeviceService {
     }
   }
 
-  async generateQRCode(id: string): Promise<ServiceResponse> {
-    try {
-      const device = await this.deviceModel.findById(id);
-      if (!device) throw new AppError("Device not found", HTTP.NOT_FOUND);
 
-      const qrCodeDataUrl = await QRCodeUtil.generateDeviceQRCode(device);
-      device.qrCodeUrl = qrCodeDataUrl;
-      await device.save();
-
-      return {
-        data: { qrCodeUrl: qrCodeDataUrl },
-        message: "QR code generated successfully",
-        status: HTTP.OK,
-        success: true,
-      };
-    } catch (error) {
-      throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
-    }
-  }
 }

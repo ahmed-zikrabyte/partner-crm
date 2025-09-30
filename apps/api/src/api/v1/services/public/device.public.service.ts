@@ -10,9 +10,9 @@ export default class PublicDeviceService {
     try {
       const device = await this.deviceModel
         .findById(id)
-        .populate("vendorId", "name")
         .populate("companyIds", "name")
-        .populate("pickedBy", "name");
+        .populate("pickedBy", "name")
+        .populate("sellHistory.vendor", "name");
         
       if (!device) {
         throw new AppError("Device not found", HTTP.NOT_FOUND);

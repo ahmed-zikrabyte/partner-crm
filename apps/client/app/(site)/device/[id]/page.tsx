@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, IndianRupee, Download, Share2, QrCode } from "lucide-react";
+import { QRCodeComponent } from "@workspace/ui/components/qr-code";
 import { Button } from "@workspace/ui/components/button";
 import {
   Card,
@@ -91,9 +92,10 @@ export default function DeviceDetailsPage() {
   };
 
   const downloadQRCode = () => {
-    if (device.qrCodeUrl) {
-      const link = document.createElement("a");
-      link.href = device.qrCodeUrl;
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL();
       link.download = `device-${device.deviceId}-qr.png`;
       link.click();
     }
@@ -123,49 +125,46 @@ export default function DeviceDetailsPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {device.qrCodeUrl && (
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <QrCode className="w-4 h-4 mr-2" />
-                      View QR
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Device QR Code</DialogTitle>
-                    </DialogHeader>
-                    <div className="flex flex-col items-center space-y-4 p-4">
-                      <div className="bg-white p-4 rounded-lg shadow-inner border-2 border-gray-100">
-                        <img
-                          src={device.qrCodeUrl}
-                          alt="Device QR Code"
-                          className="w-64 h-64 object-contain"
-                        />
-                      </div>
-                      <div className="text-center space-y-2">
-                        <p className="text-sm text-gray-600">
-                          Scan to view device details
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Device ID: {device.deviceId}
-                        </p>
-                      </div>
-                      <div className="flex gap-2 w-full">
-                        <Button
-                          onClick={downloadQRCode}
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </Button>
-                      </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <QrCode className="w-4 h-4 mr-2" />
+                    View QR
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Device QR Code</DialogTitle>
+                  </DialogHeader>
+                  <div className="flex flex-col items-center space-y-4 p-4">
+                    <div className="bg-white p-4 rounded-lg shadow-inner border-2 border-gray-100">
+                      <QRCodeComponent 
+                        value={`${process.env.NEXT_PUBLIC_CLIENT_URL || window.location.origin}/qr/device/${device._id}`}
+                        size={256}
+                      />
                     </div>
-                  </DialogContent>
-                </Dialog>
-              )}
+                    <div className="text-center space-y-2">
+                      <p className="text-sm text-gray-600">
+                        Scan to view device details
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Device ID: {device.deviceId}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 w-full">
+                      <Button
+                        onClick={downloadQRCode}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
               {device.sellHistory && device.sellHistory.length > 0 && (
                 <Button onClick={() => setTransactionDialogOpen(true)}>
                   <IndianRupee className="w-4 h-4 mr-2" />

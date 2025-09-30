@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAllTransactions } from "@/services/transactionService";
+import { getAllTransactions, exportTransactions } from "@/services/transactionService";
 import { getPartnerProfile } from "@/services/authService";
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
 import { AddTransactionDialog } from "@/components/global/add-transaction-dialog";
-import { IndianRupee } from "lucide-react";
+import { IndianRupee, Download, Search } from "lucide-react";
+import { toast } from "sonner";
 
 interface Transaction {
   _id: string;
@@ -33,19 +35,22 @@ export default function CashbookPage() {
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<"all" | "sell" | "return">("all");
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     fetchCashTransactions();
-  }, []);
+  }, [search, startDate, endDate]);
 
   useEffect(() => {
     filterTransactions();
-  }, [transactions, typeFilter]);
+  }, [transactions, typeFilter, search, startDate, endDate]);
 
   const fetchCashTransactions = async () => {
     try {
       const [transactionResponse, partnerResponse] = await Promise.all([
-        getAllTransactions(),
+        getAllTransactions({ search, startDate, endDate }),
         getPartnerProfile()
       ]);
       
@@ -70,11 +75,64 @@ export default function CashbookPage() {
   };
 
   const filterTransactions = () => {
-    if (typeFilter === "all") {
-      setFilteredTransactions(transactions);
-    } else {
-      setFilteredTransactions(transactions.filter(t => t.type === typeFilter));
+    let filtered = transactions;
+    
+    if (typeFilter !== "all") {
+      filtered = filtered.filter(t => t.type === typeFilter);
     }
+    
+    setFilteredTransactions(filtered);
+  };
+
+  const handleExport = async (tabType: "all" | "internal") => {
+    try {
+      const filters: any = {};
+      if (startDate) filters.startDate = startDate;
+      if (endDate) filters.endDate = endDate;
+      
+      if (tabType === "internal") {
+        // Export only internal transactions
+        const internalTypes = ["credit", "debit"];
+        const promises = internalTypes.map(type => 
+          exportTransactions({ ...filters, type: type as any })
+        );
+        const responses = await Promise.all(promises);
+        const combinedData = responses.flatMap(r => r.data);
+        
+        const csvContent = convertToCSV(combinedData);
+        downloadCSV(csvContent, "internal-transactions");
+      } else {
+        // Export cash transactions only
+        const response = await exportTransactions(filters);
+        const cashData = response.data.filter((t: any) => 
+          t["Payment Mode"] === "cash" || t["Type"] === "CREDIT" || t["Type"] === "DEBIT"
+        );
+        
+        const csvContent = convertToCSV(cashData);
+        downloadCSV(csvContent, "cash-transactions");
+      }
+      
+      toast.success("Transactions exported successfully");
+    } catch (error) {
+      toast.error("Failed to export transactions");
+    }
+  };
+
+  const convertToCSV = (data: any[]) => {
+    if (!data.length) return "";
+    const headers = Object.keys(data[0]).join(",");
+    const rows = data.map((row) => Object.values(row).join(","));
+    return [headers, ...rows].join("\n");
+  };
+
+  const downloadCSV = (csvContent: string, filename: string) => {
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const totalCashIn = filteredTransactions
@@ -121,18 +179,65 @@ export default function CashbookPage() {
         </TabsList>
 
         <TabsContent value="all" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold">Cash Transactions</h2>
-            <Select value={typeFilter} onValueChange={(value: "all" | "sell" | "return") => setTypeFilter(value)}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Transactions</SelectItem>
-                <SelectItem value="sell">Sales Only</SelectItem>
-                <SelectItem value="return">Returns Only</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold">Cash Transactions</h2>
+              <Button onClick={() => handleExport("all")}>
+                <Download className="w-4 h-4 mr-2" />
+                Export Cash Transactions
+              </Button>
+            </div>
+            
+            <div className="flex gap-3 items-center flex-wrap">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Search transactions..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10 w-64"
+                />
+              </div>
+              
+              <Input
+                type="date"
+                placeholder="Start Date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-40"
+              />
+              
+              <Input
+                type="date"
+                placeholder="End Date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-40"
+              />
+              
+              <Select value={typeFilter} onValueChange={(value: "all" | "sell" | "return") => setTypeFilter(value)}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Transactions</SelectItem>
+                  <SelectItem value="sell">Sales Only</SelectItem>
+                  <SelectItem value="return">Returns Only</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setSearch("");
+                  setStartDate("");
+                  setEndDate("");
+                  setTypeFilter("all");
+                }}
+              >
+                Clear Filters
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -201,6 +306,13 @@ export default function CashbookPage() {
         </TabsContent>
 
         <TabsContent value="internal" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold">Internal Transactions</h2>
+            <Button onClick={() => handleExport("internal")}>
+              <Download className="w-4 h-4 mr-2" />
+              Export Internal Transactions
+            </Button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardHeader className="pb-2">

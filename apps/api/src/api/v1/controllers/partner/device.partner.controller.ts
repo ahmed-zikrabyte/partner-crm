@@ -115,11 +115,13 @@ export default class DeviceController {
   exportSoldDevices = catchAsync(async (req: Request, res: Response) => {
     const user = req.user!;
     const partnerId = user.role === "partner" ? user._id : user.partnerId;
-    const { companyIds, pickedBy } = req.query;
+    const { companyIds, pickedBy, startDate, endDate } = req.query;
 
     const filters = {
       ...(companyIds && { companyIds }),
-      ...(pickedBy && { pickedBy })
+      ...(pickedBy && { pickedBy }),
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate })
     };
 
     const response = await this.deviceService.exportSoldDevices(partnerId as string, filters);
@@ -134,11 +136,13 @@ export default class DeviceController {
   exportNewDevices = catchAsync(async (req: Request, res: Response) => {
     const user = req.user!;
     const partnerId = user.role === "partner" ? user._id : user.partnerId;
-    const { companyIds, pickedBy } = req.query;
+    const { companyIds, pickedBy, startDate, endDate } = req.query;
 
     const filters = {
       ...(companyIds && { companyIds }),
-      ...(pickedBy && { pickedBy })
+      ...(pickedBy && { pickedBy }),
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate })
     };
 
     const response = await this.deviceService.exportNewDevices(partnerId as string, filters);
@@ -153,11 +157,13 @@ export default class DeviceController {
   exportReturnDevices = catchAsync(async (req: Request, res: Response) => {
     const user = req.user!;
     const partnerId = user.role === "partner" ? user._id : user.partnerId;
-    const { companyIds, pickedBy } = req.query;
+    const { companyIds, pickedBy, startDate, endDate } = req.query;
 
     const filters = {
       ...(companyIds && { companyIds }),
-      ...(pickedBy && { pickedBy })
+      ...(pickedBy && { pickedBy }),
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate })
     };
 
     const response = await this.deviceService.exportReturnDevices(partnerId as string, filters);
@@ -169,13 +175,5 @@ export default class DeviceController {
     });
   });
 
-  generateQRCode = catchAsync(async (req: Request, res: Response) => {
-    const response = await this.deviceService.generateQRCode(req.params.id as string);
-    return ApiResponse.success({
-      res,
-      message: response.message,
-      data: response.data,
-      statusCode: response.status,
-    });
-  });
+
 }

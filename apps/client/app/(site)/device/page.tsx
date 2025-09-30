@@ -19,15 +19,8 @@ import {
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@workspace/ui/components/dialog";
 import ConfirmationModal from "@/components/global/confirmation-modal";
 import { DataTable } from "@workspace/ui/components/data-table";
-import DeviceForm from "@/components/device/device.form";
 import {
   getAllDevices,
   toggleDeviceStatus,
@@ -56,16 +49,14 @@ export default function DevicePage() {
   const [filters, setFilters] = useState({
     companyIds: "",
     pickedBy: "",
+    startDate: "",
+    endDate: "",
   });
   const [vendors, setVendors] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [employees, setEmployees] = useState([]);
 
   const [selectedDevice, setSelectedDevice] = useState<DeviceData | null>(null);
-  const [modalMode, setModalMode] = useState<"create" | "edit" | "view" | null>(
-    null
-  );
-  const [openModal, setOpenModal] = useState(false);
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [openToggleModal, setOpenToggleModal] = useState(false);
 
@@ -85,6 +76,8 @@ export default function DevicePage() {
       // Add additional filters
       if (filters.companyIds) filter.companyIds = filters.companyIds;
       if (filters.pickedBy) filter.pickedBy = filters.pickedBy;
+      if (filters.startDate) filter.startDate = filters.startDate;
+      if (filters.endDate) filter.endDate = filters.endDate;
 
       const response = await getAllDevices({
         page: pagination.currentPage,
@@ -132,7 +125,7 @@ export default function DevicePage() {
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     setPagination((prev) => ({ ...prev, currentPage: 1 }));
-    setFilters({ companyIds: "", pickedBy: "" });
+    setFilters({ companyIds: "", pickedBy: "", startDate: "", endDate: "" });
   };
 
   const handleFilterChange = (key: string, value: string) => {
@@ -146,6 +139,8 @@ export default function DevicePage() {
       const exportFilters = {
         ...(filters.companyIds && { companyIds: filters.companyIds }),
         ...(filters.pickedBy && { pickedBy: filters.pickedBy }),
+        ...(filters.startDate && { startDate: filters.startDate }),
+        ...(filters.endDate && { endDate: filters.endDate }),
       };
 
       let response;
@@ -206,32 +201,7 @@ export default function DevicePage() {
     }
   };
 
-  // Close modal and reset state
-  const handleCloseModal = () => {
-    setOpenModal(false);
-    setSelectedDevice(null);
-    setModalMode(null);
-  };
 
-  // Handle successful form submission
-  const handleFormSuccess = () => {
-    fetchDevices();
-    handleCloseModal();
-  };
-
-  // Get modal title based on mode
-  const getModalTitle = () => {
-    switch (modalMode) {
-      case "create":
-        return "Create Device";
-      case "edit":
-        return "Edit Device";
-      case "view":
-        return "View Device";
-      default:
-        return "Device";
-    }
-  };
 
   const columns: ColumnDef<DeviceData>[] = [
     {
@@ -331,11 +301,7 @@ export default function DevicePage() {
           <Button
             size="icon"
             variant="outline"
-            onClick={() => {
-              setSelectedDevice(row.original);
-              setModalMode("edit");
-              setOpenModal(true);
-            }}
+            onClick={() => router.push(`/device/edit/${row.original._id}`)}
           >
             <EditIcon className="w-4 h-4" />
           </Button>
@@ -363,11 +329,7 @@ export default function DevicePage() {
             <div className="text-lg font-bold">Devices</div>
             <div className="flex gap-2">
               <Button
-                onClick={() => {
-                  setSelectedDevice(null);
-                  setModalMode("create");
-                  setOpenModal(true);
-                }}
+                onClick={() => router.push("/device/create")}
               >
                 Add Device
               </Button>
@@ -420,6 +382,22 @@ export default function DevicePage() {
                   ))}
                 </SelectContent>
               </Select>
+              
+              <Input
+                type="date"
+                placeholder="Start Date"
+                value={filters.startDate}
+                onChange={(e) => handleFilterChange("startDate", e.target.value)}
+                className="w-40"
+              />
+              
+              <Input
+                type="date"
+                placeholder="End Date"
+                value={filters.endDate}
+                onChange={(e) => handleFilterChange("endDate", e.target.value)}
+                className="w-40"
+              />
             </div>
             <Button onClick={handleExport}>
               <Download className="w-4 h-4 mr-2" />
@@ -445,23 +423,7 @@ export default function DevicePage() {
         </TabsContent>
       </Tabs>
 
-      {/* Device Modal for Create/Edit/View */}
-      <Dialog open={openModal} onOpenChange={handleCloseModal}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{getModalTitle()}</DialogTitle>
-          </DialogHeader>
-          {openModal && (
-            <DeviceForm
-              mode={modalMode!}
-              deviceId={selectedDevice?._id}
-              defaultValues={selectedDevice || undefined}
-              onSuccess={handleFormSuccess}
-              onCancel={handleCloseModal}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+
 
       {/* Toggle Modal */}
       {openToggleModal && selectedDevice && (

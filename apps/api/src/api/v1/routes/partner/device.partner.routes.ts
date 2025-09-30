@@ -54,9 +54,6 @@ deviceRouter.get("/export/return", (req: Request, res: Response, next: NextFunct
   deviceController.exportReturnDevices(req, res, next)
 );
 
-// Generate QR code for device
-deviceRouter.post("/qr/:id", (req: Request, res: Response, next: NextFunction) =>
-  deviceController.generateQRCode(req, res, next)
-);
+
 
 export default deviceRouter;

@@ -40,11 +40,13 @@ export default function PublicDeviceDetailsPage() {
   useEffect(() => {
     const fetchDevice = async () => {
       try {
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/public/device/${params.id}`
-        );
+        const url = `${process.env.NEXT_PUBLIC_API_URL}/api/v1/public/device/${params.id}`;
+        console.log('Fetching device from:', url);
+        const response = await axios.get(url);
+        console.log('Response:', response.data);
         setDevice(response.data.data);
-      } catch (err) {
+      } catch (err: any) {
+        console.error('Error fetching device:', err.response?.data || err.message);
         setError("Device not found or unavailable");
       } finally {
         setLoading(false);

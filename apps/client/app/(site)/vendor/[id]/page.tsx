@@ -2,8 +2,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, IndianRupee } from "lucide-react";
+import { ArrowLeft, IndianRupee, Download, Search } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
 import {
   Card,
   CardContent,
@@ -22,7 +23,7 @@ import {
 import type { ColumnDef } from "@tanstack/react-table";
 import { getVendorById } from "@/services/vendorService";
 import { getAllDevices } from "@/services/deviceService";
-import { getAllTransactions } from "@/services/transactionService";
+import { getAllTransactions, exportTransactions } from "@/services/transactionService";
 import { AddTransactionDialog } from "@/components/global/add-transaction-dialog";
 import type { VendorData } from "@/components/vendor/vendor.schema";
 import { toast } from "sonner";
@@ -52,6 +53,9 @@ export default function VendorDetailsPage({
   const [loading, setLoading] = useState(true);
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
   const [vendorId, setVendorId] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     const fetchVendorDetails = async () => {
@@ -61,7 +65,7 @@ export default function VendorDetailsPage({
         const [vendorRes, devicesRes, transactionsRes] = await Promise.all([
           getVendorById(resolvedParams.id),
           getAllDevices({ limit: 0 }),
-          getAllTransactions({ vendorId: resolvedParams.id }),
+          getAllTransactions({ vendorId: resolvedParams.id, search, startDate, endDate }),
         ]);
 
         // Filter devices that have been sold to this vendor
@@ -83,7 +87,38 @@ export default function VendorDetailsPage({
     };
 
     fetchVendorDetails();
-  }, [params]);
+  }, [params, search, startDate, endDate]);
+
+  const handleExport = async () => {
+    try {
+      const filters: any = { vendorId };
+      if (search) filters.search = search;
+      if (startDate) filters.startDate = startDate;
+      if (endDate) filters.endDate = endDate;
+      
+      const response = await exportTransactions(filters);
+      
+      const csvContent = convertToCSV(response.data);
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `vendor-${vendor?.name}-transactions-${new Date().toISOString().split("T")[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Transactions exported successfully");
+    } catch (error) {
+      toast.error("Failed to export transactions");
+    }
+  };
+
+  const convertToCSV = (data: any[]) => {
+    if (!data.length) return "";
+    const headers = Object.keys(data[0]).join(",");
+    const rows = data.map((row) => Object.values(row).join(","));
+    return [headers, ...rows].join("\n");
+  };
 
   const deviceColumns: ColumnDef<DeviceData>[] = [
     {
@@ -248,7 +283,52 @@ export default function VendorDetailsPage({
         <TabsContent value="transactions">
           <Card>
             <CardHeader>
-              <CardTitle>Transactions</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Transactions</CardTitle>
+                <Button onClick={handleExport}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export Transactions
+                </Button>
+              </div>
+              
+              <div className="flex gap-3 items-center flex-wrap mt-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    placeholder="Search transactions..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-10 w-64"
+                  />
+                </div>
+                
+                <Input
+                  type="date"
+                  placeholder="Start Date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-40"
+                />
+                
+                <Input
+                  type="date"
+                  placeholder="End Date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-40"
+                />
+                
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setSearch("");
+                    setStartDate("");
+                    setEndDate("");
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <DataTable
@@ -296,7 +376,7 @@ export default function VendorDetailsPage({
         onSuccess={async () => {
           const [vendorRes, transactionsRes] = await Promise.all([
             getVendorById(vendorId),
-            getAllTransactions({ vendorId: vendorId }),
+            getAllTransactions({ vendorId: vendorId, search, startDate, endDate }),
           ]);
           setVendor(vendorRes.data);
           setTransactions(transactionsRes.data || []);

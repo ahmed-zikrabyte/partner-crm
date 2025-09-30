@@ -143,17 +143,51 @@ export default class TransactionService {
     }
   }
 
-  async getAll(partnerId: string, vendorId?: string, type?: "return" | "sell" | "credit" | "debit"): Promise<ServiceResponse> {
+  async getAll(
+    partnerId: string,
+    vendorId?: string,
+    type?: "return" | "sell" | "credit" | "debit",
+    search?: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<ServiceResponse> {
     try {
       const query: any = { partnerId: new mongoose.Types.ObjectId(partnerId) };
       if (vendorId) query.vendorId = new mongoose.Types.ObjectId(vendorId);
       if (type) query.type = type;
 
-      const transactions = await TransactionModel.find(query)
+      // Date filtering
+      if (startDate || endDate) {
+        const dateQuery: any = {};
+        if (startDate) {
+          dateQuery.$gte = new Date(startDate);
+        }
+        if (endDate) {
+          const endDateObj = new Date(endDate);
+          endDateObj.setHours(23, 59, 59, 999);
+          dateQuery.$lte = endDateObj;
+        }
+        query.date = dateQuery;
+      }
+
+      let transactions = await TransactionModel.find(query)
         .populate("vendorId", "name")
         .populate("deviceId", "deviceId brand model")
         .populate("author.authorId", "name")
         .sort({ date: -1 });
+
+      // Search filtering
+      if (search) {
+        const searchRegex = new RegExp(search, "i");
+        transactions = transactions.filter(transaction => 
+          (transaction.vendorId as any)?.name?.match(searchRegex) ||
+          (transaction.deviceId as any)?.deviceId?.match(searchRegex) ||
+          (transaction.deviceId as any)?.brand?.match(searchRegex) ||
+          (transaction.deviceId as any)?.model?.match(searchRegex) ||
+          transaction.note?.match(searchRegex) ||
+          transaction.type?.match(searchRegex)
+        );
+      }
 
       return {
         message: "Transactions fetched successfully",
@@ -184,6 +218,72 @@ export default class TransactionService {
       };
     } catch (error) {
       console.error(error);
+      throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async exportTransactions(
+    partnerId: string,
+    filters?: {
+      vendorId?: string;
+      type?: "return" | "sell" | "credit" | "debit";
+      startDate?: string;
+      endDate?: string;
+    }
+  ): Promise<ServiceResponse> {
+    try {
+      const query: any = { partnerId: new mongoose.Types.ObjectId(partnerId) };
+      if (filters?.vendorId) query.vendorId = new mongoose.Types.ObjectId(filters.vendorId);
+      if (filters?.type) query.type = filters.type;
+
+      // Date filtering
+      if (filters?.startDate || filters?.endDate) {
+        const dateQuery: any = {};
+        if (filters.startDate) {
+          dateQuery.$gte = new Date(filters.startDate);
+        }
+        if (filters.endDate) {
+          const endDateObj = new Date(filters.endDate);
+          endDateObj.setHours(23, 59, 59, 999);
+          dateQuery.$lte = endDateObj;
+        }
+        query.date = dateQuery;
+      }
+
+      const transactions = await TransactionModel.find(query)
+        .populate("vendorId", "name")
+        .populate("deviceId", "deviceId brand model")
+        .populate("author.authorId", "name")
+        .sort({ date: -1 });
+
+      const formatDate = (dateStr: string | Date) => {
+        if (!dateStr) return "N/A";
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "N/A";
+        return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
+      };
+
+      const exportData = transactions.map((transaction) => ({
+        "Transaction ID": transaction._id,
+        "Date": formatDate(transaction.date),
+        "Type": transaction.type.toUpperCase(),
+        "Vendor": (transaction.vendorId as any)?.name || "N/A",
+        "Device ID": (transaction.deviceId as any)?.deviceId || "N/A",
+        "Device Brand": (transaction.deviceId as any)?.brand || "N/A",
+        "Device Model": (transaction.deviceId as any)?.model || "N/A",
+        "Amount": transaction.amount,
+        "Payment Mode": transaction.paymentMode || "N/A",
+        "Note": transaction.note || "N/A",
+        "Created By": (transaction.author.authorId as any)?.name || "N/A",
+      }));
+
+      return {
+        data: exportData,
+        message: "Transactions exported successfully",
+        status: HTTP.OK,
+        success: true,
+      };
+    } catch (error) {
       throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
     }
   }

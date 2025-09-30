@@ -1,12 +1,12 @@
 import express from "express";
 import adminRoutes from "./admin/admin.routes";
 import partnerRoutes from "./partner/partner.route";
-import publicDeviceRoutes from "./public/device.public.routes";
+import publicRoutes from "./public/public.routes";
 
 const v1Routes: express.Router = express.Router();
 
 v1Routes.use("/admin", adminRoutes);
 v1Routes.use("/partner", partnerRoutes);
-v1Routes.use("/public", publicDeviceRoutes);
+v1Routes.use("/public", publicRoutes);
 
 export default v1Routes;
