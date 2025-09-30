@@ -4,8 +4,16 @@ import * as z from "zod";
 export const createCompanySchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name is too long"),
   creditValue: z
-    .number({ invalid_type_error: "Credit value must be a number" })
-    .nonnegative("Credit value cannot be negative"),
+    .union([z.string(), z.number()])
+    .transform((val) => {
+      if (typeof val === 'string') {
+        const parsed = parseFloat(val);
+        if (isNaN(parsed)) throw new Error("Credit value must be a number");
+        return parsed;
+      }
+      return val;
+    })
+    .refine((val) => val >= 0, "Credit value cannot be negative"),
   companyIds: z.array(z.string()).min(1, "At least one company ID is required"),
   isActive: z.boolean().default(true).optional(),
 });
@@ -18,8 +26,16 @@ export const updateCompanySchema = z.object({
     .max(100, "Name is too long")
     .optional(),
   creditValue: z
-    .number({ invalid_type_error: "Credit value must be a number" })
-    .nonnegative("Credit value cannot be negative")
+    .union([z.string(), z.number()])
+    .transform((val) => {
+      if (typeof val === 'string') {
+        const parsed = parseFloat(val);
+        if (isNaN(parsed)) throw new Error("Credit value must be a number");
+        return parsed;
+      }
+      return val;
+    })
+    .refine((val) => val >= 0, "Credit value cannot be negative")
     .optional(),
   companyIds: z.array(z.string()).min(1, "At least one company ID is required").optional(),
   isActive: z.boolean().optional(),

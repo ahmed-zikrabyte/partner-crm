@@ -6,11 +6,12 @@ export interface ITransaction {
     authorType: "partner" | "employee";
     authorId: mongoose.Types.ObjectId;
   };
-  vendorId: mongoose.Types.ObjectId;
+  vendorId?: mongoose.Types.ObjectId;
+  deviceId?: mongoose.Types.ObjectId;
   amount: number;
   note: string;
-  paymentMode: "upi" | "card" | "cash";
-  type: "return" | "sell";
+  paymentMode?: "upi" | "card" | "cash";
+  type: "return" | "sell" | "credit" | "debit";
   date: Date;
 }
 
@@ -36,21 +37,31 @@ const transactionSchema = new mongoose.Schema<ITransaction>(
     vendorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "vendor",
-      required: true,
+      required: function () {
+        return this.type === "sell" || this.type === "return";
+      },
+    },
+    deviceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "device",
+      required: function () {
+        return this.type === "return";
+      },
     },
     amount: { type: Number, required: true },
     note: { type: String, trim: true },
     paymentMode: {
       type: String,
       enum: ["upi", "card", "cash"],
-      required: true,
+      required: function () {
+        return this.type === "sell" || this.type === "return";
+      },
     },
     type: {
       type: String,
-      enum: ["return", "sell"],
+      enum: ["return", "sell", "credit", "debit"],
       required: true,
     },
-
     date: { type: Date, default: Date.now },
   },
   { timestamps: true }

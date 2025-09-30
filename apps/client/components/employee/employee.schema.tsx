@@ -6,7 +6,17 @@ export const createEmployeeSchema = z.object({
   email: z.string().email("Invalid email address"),
   phone: z.string().min(1, "Phone is required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  salaryPerDay: z.number().nonnegative("Salary per day cannot be negative"),
+  salaryPerDay: z
+    .union([z.string(), z.number()])
+    .transform((val) => {
+      if (typeof val === 'string') {
+        const parsed = parseFloat(val);
+        if (isNaN(parsed)) throw new Error("Salary per day must be a number");
+        return parsed;
+      }
+      return val;
+    })
+    .refine((val) => val >= 0, "Salary per day cannot be negative"),
 });
 
 // ✅ Schema for updating an employee
@@ -15,7 +25,18 @@ export const updateEmployeeSchema = z.object({
   email: z.string().email("Invalid email address").optional(),
   phone: z.string().min(1, "Phone is required").optional(),
   password: z.string().min(6, "Password must be at least 6 characters").optional(),
-  salaryPerDay: z.number().nonnegative("Salary per day cannot be negative").optional(),
+  salaryPerDay: z
+    .union([z.string(), z.number()])
+    .transform((val) => {
+      if (typeof val === 'string') {
+        const parsed = parseFloat(val);
+        if (isNaN(parsed)) throw new Error("Salary per day must be a number");
+        return parsed;
+      }
+      return val;
+    })
+    .refine((val) => val >= 0, "Salary per day cannot be negative")
+    .optional(),
 });
 
 // ✅ Schema for employee login

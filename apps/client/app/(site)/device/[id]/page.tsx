@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, IndianRupee, Download, Share2, QrCode } from "lucide-react";
+import { QRCodeComponent } from "@workspace/ui/components/qr-code";
 import { Button } from "@workspace/ui/components/button";
 import {
   Card,
@@ -91,11 +92,38 @@ export default function DeviceDetailsPage() {
   };
 
   const downloadQRCode = () => {
-    if (device.qrCodeUrl) {
-      const link = document.createElement("a");
-      link.href = device.qrCodeUrl;
-      link.download = `device-${device.deviceId}-qr.png`;
-      link.click();
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+      // Create a new canvas with company name
+      const downloadCanvas = document.createElement('canvas');
+      const ctx = downloadCanvas.getContext('2d');
+      
+      if (ctx) {
+        const companyName = getCompanyName(device.companyIds);
+        const padding = 20;
+        const textHeight = 30;
+        
+        downloadCanvas.width = canvas.width + (padding * 2);
+        downloadCanvas.height = canvas.height + textHeight + (padding * 2);
+        
+        // Fill white background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, downloadCanvas.width, downloadCanvas.height);
+        
+        // Add company name
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(companyName, downloadCanvas.width / 2, padding + 20);
+        
+        // Add QR code
+        ctx.drawImage(canvas, padding, textHeight + padding);
+        
+        const link = document.createElement('a');
+        link.href = downloadCanvas.toDataURL();
+        link.download = `${companyName}-device-${device.deviceId}-qr.png`;
+        link.click();
+      }
     }
   };
 
@@ -123,50 +151,50 @@ export default function DeviceDetailsPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {device.qrCodeUrl && (
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <QrCode className="w-4 h-4 mr-2" />
-                      View QR
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Device QR Code</DialogTitle>
-                    </DialogHeader>
-                    <div className="flex flex-col items-center space-y-4 p-4">
-                      <div className="bg-white p-4 rounded-lg shadow-inner border-2 border-gray-100">
-                        <img
-                          src={device.qrCodeUrl}
-                          alt="Device QR Code"
-                          className="w-64 h-64 object-contain"
-                        />
-                      </div>
-                      <div className="text-center space-y-2">
-                        <p className="text-sm text-gray-600">
-                          Scan to view device details
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Device ID: {device.deviceId}
-                        </p>
-                      </div>
-                      <div className="flex gap-2 w-full">
-                        <Button
-                          onClick={downloadQRCode}
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </Button>
-                      </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <QrCode className="w-4 h-4 mr-2" />
+                    View QR
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Device QR Code</DialogTitle>
+                  </DialogHeader>
+                  <div className="flex flex-col items-center space-y-4 p-4">
+                    <div className="text-center">
+                      <h3 className="font-semibold text-lg mb-3">{getCompanyName(device.companyIds)}</h3>
                     </div>
-                  </DialogContent>
-                </Dialog>
-              )}
-              {device.vendorId && (
+                    <div className="bg-white p-3 rounded-lg shadow-inner border-2 border-gray-100">
+                      <QRCodeComponent 
+                        value={`${process.env.NEXT_PUBLIC_CLIENT_URL || window.location.origin}/qr/device/${device._id}`}
+                        size={180}
+                      />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <p className="text-sm text-gray-600">
+                        Scan to view device details
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Device ID: {device.deviceId}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 w-full">
+                      <Button
+                        onClick={downloadQRCode}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              {device.sellHistory && device.sellHistory.length > 0 && (
                 <Button onClick={() => setTransactionDialogOpen(true)}>
                   <IndianRupee className="w-4 h-4 mr-2" />
                   Add Transaction
@@ -316,12 +344,37 @@ export default function DeviceDetailsPage() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">
-                        Sold To
+                        Current Status
                       </label>
                       <p className="text-base font-semibold text-gray-900 mt-1 capitalize">
-                        {device.vendorId
-                          ? getVendorName(device.vendorId as string)
-                          : "-"}
+                        {(() => {
+                          if (!device.sellHistory || device.sellHistory.length === 0) return "New";
+                          const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+                          if (!lastEntry) return "New";
+                          return lastEntry.type === "sell" ? "Sold" : "Returned";
+                        })()}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">
+                        Latest Vendor
+                      </label>
+                      <p className="text-base font-semibold text-gray-900 mt-1 capitalize">
+                        {(() => {
+                          if (!device.sellHistory || device.sellHistory.length === 0) return "-";
+                          const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+                          if (!lastEntry) return "-";
+                          const vendorId = typeof lastEntry.vendor === 'object' ? lastEntry.vendor._id : lastEntry.vendor;
+                          return getVendorName(vendorId);
+                        })()}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">
+                        Return Count
+                      </label>
+                      <p className="text-base font-semibold text-gray-900 mt-1">
+                        {device.sellHistory?.filter(h => h.type === 'return').length || 0}
                       </p>
                     </div>
                   </div>
@@ -401,16 +454,30 @@ export default function DeviceDetailsPage() {
                       ₹{device.totalCost}
                     </p>
                   </div>
-                  {device.selling && (
-                    <div className="bg-emerald-50 p-3 rounded-lg">
-                      <label className="text-xs font-medium text-emerald-600 uppercase tracking-wide">
-                        Selling Price
-                      </label>
-                      <p className="text-lg font-semibold text-emerald-900 mt-1">
-                        ₹{device.selling}
-                      </p>
-                    </div>
-                  )}
+                  {(() => {
+                    if (!device.sellHistory || device.sellHistory.length === 0) return null;
+                    const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+                    if (!lastEntry) return null;
+                    const amount = lastEntry.selling || lastEntry.returnAmount || lastEntry.amount;
+                    if (!amount) return null;
+                    
+                    return (
+                      <div className={`p-3 rounded-lg ${
+                        lastEntry.type === 'sell' ? 'bg-emerald-50' : 'bg-red-50'
+                      }`}>
+                        <label className={`text-xs font-medium uppercase tracking-wide ${
+                          lastEntry.type === 'sell' ? 'text-emerald-600' : 'text-red-600'
+                        }`}>
+                          {lastEntry.type === 'sell' ? 'Latest Selling Price' : 'Latest Return Amount'}
+                        </label>
+                        <p className={`text-lg font-semibold mt-1 ${
+                          lastEntry.type === 'sell' ? 'text-emerald-900' : 'text-red-900'
+                        }`}>
+                          ₹{amount}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   {device.profit !== undefined && (
                     <div
                       className={`p-3 rounded-lg ${device.profit >= 0 ? "bg-green-50 border-2 border-green-200" : "bg-red-50 border-2 border-red-200"}`}
@@ -431,6 +498,50 @@ export default function DeviceDetailsPage() {
               </CardContent>
             </Card>
 
+            {device.sellHistory && device.sellHistory.length > 0 && (
+              <Card className="bg-white shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold text-gray-900">
+                    Transaction History
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {device.sellHistory.map((transaction, index) => (
+                      <div key={index} className={`p-4 rounded-lg border-l-4 ${
+                        transaction.type === 'sell' 
+                          ? 'bg-green-50 border-green-400' 
+                          : 'bg-red-50 border-red-400'
+                      }`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant={transaction.type === 'sell' ? 'default' : 'destructive'}>
+                                {transaction.type === 'sell' ? 'SOLD' : 'RETURNED'}
+                              </Badge>
+                              <span className="text-sm text-gray-500">
+                                {new Date(transaction.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <p className="font-medium text-gray-900">
+                              {transaction.type === 'sell' ? 'Sold to' : 'Returned from'}: {getVendorName(typeof transaction.vendor === 'object' ? transaction.vendor._id : transaction.vendor)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-lg font-bold ${
+                              transaction.type === 'sell' ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              ₹{transaction.selling || transaction.returnAmount || transaction.amount || 0}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {device.issues && (
               <Card className="bg-white shadow-sm">
                 <CardHeader className="">
@@ -449,11 +560,15 @@ export default function DeviceDetailsPage() {
         </div>
       </div>
 
-      {device.vendorId && (
+      {device.sellHistory && device.sellHistory.length > 0 && (
         <AddTransactionDialog
           open={transactionDialogOpen}
           onOpenChange={setTransactionDialogOpen}
-          entityId={device.vendorId as string}
+          entityId={(() => {
+            const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+            if (!lastEntry) return '';
+            return typeof lastEntry.vendor === 'object' ? lastEntry.vendor._id : lastEntry.vendor || '';
+          })()}
           entityType="vendor"
           onSuccess={() => {
             toast.success("Transaction recorded for vendor");
