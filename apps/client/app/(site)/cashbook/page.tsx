@@ -38,6 +38,10 @@ export default function CashbookPage() {
   const [search, setSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalStartDate, setInternalStartDate] = useState("");
+  const [internalEndDate, setInternalEndDate] = useState("");
+  const [internalTypeFilter, setInternalTypeFilter] = useState<"all" | "credit" | "debit">("all");
 
   useEffect(() => {
     fetchCashTransactions();
@@ -144,6 +148,16 @@ export default function CashbookPage() {
     .reduce((sum, t) => sum + t.amount, 0);
 
   const netCash = totalCashIn - totalCashOut;
+
+  const filteredInternalTransactions = internalTransactions.filter(transaction => {
+    const matchesSearch = transaction.note?.toLowerCase().includes(internalSearch.toLowerCase()) ||
+                         transaction.author.authorId.name?.toLowerCase().includes(internalSearch.toLowerCase());
+    const matchesDateRange = (!internalStartDate || new Date(transaction.date) >= new Date(internalStartDate)) &&
+                            (!internalEndDate || new Date(transaction.date) <= new Date(internalEndDate));
+    const matchesType = internalTypeFilter === "all" || transaction.type === internalTypeFilter;
+    
+    return matchesSearch && matchesDateRange && matchesType;
+  });
 
   if (loading) {
     return <div className="p-6">Loading cash transactions...</div>;
@@ -306,12 +320,65 @@ export default function CashbookPage() {
         </TabsContent>
 
         <TabsContent value="internal" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold">Internal Transactions</h2>
-            <Button onClick={() => handleExport("internal")}>
-              <Download className="w-4 h-4 mr-2" />
-              Export Internal Transactions
-            </Button>
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold">Internal Transactions</h2>
+              <Button onClick={() => handleExport("internal")}>
+                <Download className="w-4 h-4 mr-2" />
+                Export Internal Transactions
+              </Button>
+            </div>
+            
+            <div className="flex gap-3 items-center flex-wrap">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Search transactions..."
+                  value={internalSearch}
+                  onChange={(e) => setInternalSearch(e.target.value)}
+                  className="pl-10 w-64"
+                />
+              </div>
+              
+              <Input
+                type="date"
+                placeholder="Start Date"
+                value={internalStartDate}
+                onChange={(e) => setInternalStartDate(e.target.value)}
+                className="w-40"
+              />
+              
+              <Input
+                type="date"
+                placeholder="End Date"
+                value={internalEndDate}
+                onChange={(e) => setInternalEndDate(e.target.value)}
+                className="w-40"
+              />
+              
+              <Select value={internalTypeFilter} onValueChange={(value: "all" | "credit" | "debit") => setInternalTypeFilter(value)}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Transactions</SelectItem>
+                  <SelectItem value="credit">Credits Only</SelectItem>
+                  <SelectItem value="debit">Debits Only</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setInternalSearch("");
+                  setInternalStartDate("");
+                  setInternalEndDate("");
+                  setInternalTypeFilter("all");
+                }}
+              >
+                Clear Filters
+              </Button>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
@@ -320,7 +387,7 @@ export default function CashbookPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ₹{internalTransactions.filter(t => t.type === "credit").reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
+                  ₹{filteredInternalTransactions.filter(t => t.type === "credit").reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -330,7 +397,7 @@ export default function CashbookPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ₹{internalTransactions.filter(t => t.type === "debit").reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
+                  ₹{filteredInternalTransactions.filter(t => t.type === "debit").reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -340,13 +407,13 @@ export default function CashbookPage() {
               </CardHeader>
               <CardContent>
                 <div className={`text-2xl font-bold ${
-                  (internalTransactions.filter(t => t.type === "credit").reduce((sum, t) => sum + t.amount, 0) - 
-                   internalTransactions.filter(t => t.type === "debit").reduce((sum, t) => sum + t.amount, 0)) >= 0 
+                  (filteredInternalTransactions.filter(t => t.type === "credit").reduce((sum, t) => sum + t.amount, 0) - 
+                   filteredInternalTransactions.filter(t => t.type === "debit").reduce((sum, t) => sum + t.amount, 0)) >= 0 
                   ? 'text-green-600' : 'text-red-600'
                 }`}>
                   ₹{(
-                    internalTransactions.filter(t => t.type === "credit").reduce((sum, t) => sum + t.amount, 0) - 
-                    internalTransactions.filter(t => t.type === "debit").reduce((sum, t) => sum + t.amount, 0)
+                    filteredInternalTransactions.filter(t => t.type === "credit").reduce((sum, t) => sum + t.amount, 0) - 
+                    filteredInternalTransactions.filter(t => t.type === "debit").reduce((sum, t) => sum + t.amount, 0)
                   ).toLocaleString()}
                 </div>
               </CardContent>
@@ -358,11 +425,11 @@ export default function CashbookPage() {
               <CardTitle>Internal Transactions</CardTitle>
             </CardHeader>
             <CardContent>
-              {internalTransactions.length === 0 ? (
+              {filteredInternalTransactions.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">No internal transactions found</p>
               ) : (
                 <div className="space-y-4">
-                  {internalTransactions.map((transaction) => (
+                  {filteredInternalTransactions.map((transaction) => (
                     <div key={transaction._id} className="border rounded-lg p-4">
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-2">

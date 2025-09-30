@@ -94,10 +94,36 @@ export default function DeviceDetailsPage() {
   const downloadQRCode = () => {
     const canvas = document.querySelector('canvas');
     if (canvas) {
-      const link = document.createElement('a');
-      link.href = canvas.toDataURL();
-      link.download = `device-${device.deviceId}-qr.png`;
-      link.click();
+      // Create a new canvas with company name
+      const downloadCanvas = document.createElement('canvas');
+      const ctx = downloadCanvas.getContext('2d');
+      
+      if (ctx) {
+        const companyName = getCompanyName(device.companyIds);
+        const padding = 20;
+        const textHeight = 30;
+        
+        downloadCanvas.width = canvas.width + (padding * 2);
+        downloadCanvas.height = canvas.height + textHeight + (padding * 2);
+        
+        // Fill white background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, downloadCanvas.width, downloadCanvas.height);
+        
+        // Add company name
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(companyName, downloadCanvas.width / 2, padding + 20);
+        
+        // Add QR code
+        ctx.drawImage(canvas, padding, textHeight + padding);
+        
+        const link = document.createElement('a');
+        link.href = downloadCanvas.toDataURL();
+        link.download = `${companyName}-device-${device.deviceId}-qr.png`;
+        link.click();
+      }
     }
   };
 
@@ -132,15 +158,18 @@ export default function DeviceDetailsPage() {
                     View QR
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-sm">
                   <DialogHeader>
                     <DialogTitle>Device QR Code</DialogTitle>
                   </DialogHeader>
                   <div className="flex flex-col items-center space-y-4 p-4">
-                    <div className="bg-white p-4 rounded-lg shadow-inner border-2 border-gray-100">
+                    <div className="text-center">
+                      <h3 className="font-semibold text-lg mb-3">{getCompanyName(device.companyIds)}</h3>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg shadow-inner border-2 border-gray-100">
                       <QRCodeComponent 
                         value={`${process.env.NEXT_PUBLIC_CLIENT_URL || window.location.origin}/qr/device/${device._id}`}
-                        size={256}
+                        size={180}
                       />
                     </div>
                     <div className="text-center space-y-2">

@@ -53,6 +53,7 @@ export function AddTransactionDialog({
   });
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState<any[]>([]);
+  const [deviceSearch, setDeviceSearch] = useState("");
 
   const resetForm = () => {
     setForm({
@@ -62,6 +63,7 @@ export function AddTransactionDialog({
       type: entityType === "partner" ? "credit" : "sell",
       deviceId: "",
     });
+    setDeviceSearch("");
   };
 
   useEffect(() => {
@@ -220,11 +222,37 @@ export function AddTransactionDialog({
                   <SelectValue placeholder="Select Device" />
                 </SelectTrigger>
                 <SelectContent>
-                  {devices.map((device) => (
-                    <SelectItem key={device._id} value={device._id}>
-                      {device.deviceId} - {device.brand} {device.model}
-                    </SelectItem>
-                  ))}
+                  <div className="p-2">
+                    <Input
+                      placeholder="Search devices..."
+                      value={deviceSearch}
+                      onChange={(e) => setDeviceSearch(e.target.value)}
+                      className="mb-2"
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                  {devices
+                    .filter((device) => {
+                      // Filter devices sold to this vendor
+                      const soldToVendor = entityType === "vendor" && device.sellHistory?.some((history: any) => 
+                        history.type === 'sell' && history.vendor?._id === entityId
+                      );
+                      
+                      // Apply search filter
+                      const matchesSearch = !deviceSearch || 
+                        device.deviceId?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
+                        device.brand?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
+                        device.model?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
+                        device.imei1?.toLowerCase().includes(deviceSearch.toLowerCase());
+                      
+                      return (entityType === "vendor" ? soldToVendor : true) && matchesSearch;
+                    })
+                    .map((device) => (
+                      <SelectItem key={device._id} value={device._id}>
+                        {device.deviceId} - {device.brand} {device.model}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

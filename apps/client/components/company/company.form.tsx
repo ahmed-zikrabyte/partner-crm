@@ -107,32 +107,38 @@ export default function CompanyForm({
         />
 
         {/* Credit Value */}
-        <FormField
-          control={form.control}
-          name="creditValue"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Credit Value</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  step="any"
-                  placeholder="Enter credit value (e.g., 12.5)"
-                  {...field}
-                  readOnly={mode === "view"}
-                  min="0"
-                  style={{ MozAppearance: 'textfield' }}
-                  className="[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    field.onChange(value === '' ? undefined : parseFloat(value) || 0);
-                  }}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+<FormField
+  control={form.control}
+  name="creditValue"
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>Credit Value</FormLabel>
+      <FormControl>
+        <Input
+          type="text"
+          placeholder="Enter credit value (e.g., 12.5)"
+          value={field.value?.toString() ?? ""}
+          readOnly={mode === "view"}
+          onChange={(e) => {
+            const value = e.target.value;
+
+            if (value === "") {
+              field.onChange("");
+              return;
+            }
+
+            // allow numbers + decimal point in progress
+            if (/^\d*\.?\d*$/.test(value)) {
+              field.onChange(value);
+            }
+          }}
         />
+      </FormControl>
+      <FormMessage />
+    </FormItem>
+  )}
+/>
+
 
         {/* Company IDs */}
         <FormField

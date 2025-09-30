@@ -65,12 +65,18 @@ export default function DevicePage() {
     try {
       let filter: any = {};
       
-      if (activeTab === "new") {
-        filter.deviceType = "new";
-      } else if (activeTab === "sold") {
-        filter.deviceType = "sold";
-      } else if (activeTab === "return") {
-        filter.deviceType = "return";
+      // If there's a search term, search across all device types
+      if (search.trim()) {
+        // Don't filter by deviceType when searching
+      } else {
+        // Only apply tab filter when not searching
+        if (activeTab === "new") {
+          filter.deviceType = "new";
+        } else if (activeTab === "sold") {
+          filter.deviceType = "sold";
+        } else if (activeTab === "return") {
+          filter.deviceType = "return";
+        }
       }
 
       // Add additional filters
@@ -84,8 +90,18 @@ export default function DevicePage() {
         search,
         filter,
       });
+      
       setDevices(response.data.devices);
       setPagination(response.data.pagination);
+      
+      // If searching and devices found, auto-switch to appropriate tab
+      if (search.trim() && response.data.devices.length > 0) {
+        const firstDevice = response.data.devices[0];
+        const deviceType = getDeviceType(firstDevice);
+        if (deviceType && deviceType !== activeTab) {
+          setActiveTab(deviceType);
+        }
+      }
     } catch (err: any) {
       console.error(err);
       toast.error(err?.response?.data?.message || "Failed to fetch devices");
@@ -120,6 +136,16 @@ export default function DevicePage() {
   const handleSearch = (value: string) => {
     setSearch(value);
     setPagination((prev) => ({ ...prev, currentPage: 1 }));
+  };
+
+  // Helper function to determine device type
+  const getDeviceType = (device: any) => {
+    if (device.sellHistory && device.sellHistory.length > 0) {
+      const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+      if (lastEntry.type === 'return') return 'return';
+      if (lastEntry.type === 'sell') return 'sold';
+    }
+    return 'new';
   };
 
   const handleTabChange = (value: string) => {

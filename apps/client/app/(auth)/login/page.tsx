@@ -55,15 +55,20 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginForm) => {
     try {
-      const response = loginType === "partner" 
-        ? await login(data.email, data.password)
-        : await employeeLogin(data.email, data.password);
-      
-      const tokenKey = loginType === "partner" ? "partnerToken" : "employeeToken";
+      const response =
+        loginType === "partner"
+          ? await login(data.email, data.password)
+          : await employeeLogin(data.email, data.password);
+
+      const tokenKey =
+        loginType === "partner" ? "partnerToken" : "employeeToken";
       localStorage.setItem(tokenKey, response.data.token);
       localStorage.setItem("userType", loginType);
-      
-      const redirectUrl = loginType === "partner" ? "/company?type=company" : "/device?type=device";
+
+      const redirectUrl =
+        loginType === "partner"
+          ? "/company?type=company"
+          : "/device?type=device";
       router.push(redirectUrl);
       toast.success(response.message);
     } catch (error: any) {
@@ -75,8 +80,8 @@ export default function LoginPage() {
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-white mb-2">{loginType === "partner" ? "Partner" : "Employee"} Login</h1>
-          <p className="text-gray-400">Sign in to manage your {loginType === "partner" ? "products" : "tasks"}</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Partner Login</h1>
+          <p className="text-gray-400">Sign in to manage your products</p>
         </div>
 
         <Card className="bg-gray-950 border border-gray-800 shadow-xl">
@@ -87,7 +92,7 @@ export default function LoginPage() {
             <CardDescription className="text-center text-gray-400">
               Please enter your credentials below
             </CardDescription>
-            <div className="flex bg-gray-800 rounded-lg p-1 mt-4">
+            {/* <div className="flex bg-gray-800 rounded-lg p-1 mt-4">
               <button
                 type="button"
                 onClick={() => setLoginType("partner")}
@@ -110,7 +115,7 @@ export default function LoginPage() {
               >
                 Employee
               </button>
-            </div>
+            </div> */}
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -133,7 +138,7 @@ export default function LoginPage() {
                           <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
                           <Input
                             type="email"
-                            placeholder={loginType === "partner" ? "partner@company.com" : "employee@company.com"}
+                            placeholder="partner@company.com"
                             className="pl-10 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus:border-gray-600 focus:ring-1 focus:ring-white"
                             {...field}
                           />

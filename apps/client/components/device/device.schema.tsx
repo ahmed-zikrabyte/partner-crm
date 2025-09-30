@@ -18,7 +18,19 @@ export const createDeviceSchema = z.object({
   commission: z.number().nonnegative("Commission must be positive").optional().default(0),
   gst: z.number().nonnegative("GST must be positive").optional().default(0),
   totalCost: z.number().nonnegative("Total Cost must be positive").optional().default(0),
-  selling: z.number().nonnegative("Selling price must be positive").optional(),
+  selling: z
+    .union([z.string(), z.number()])
+    .transform((val) => {
+      if (typeof val === 'string') {
+        if (val === '') return undefined;
+        const parsed = parseFloat(val);
+        if (isNaN(parsed)) throw new Error("Selling price must be a number");
+        return parsed;
+      }
+      return val;
+    })
+    .refine((val) => val === undefined || val >= 0, "Selling price must be positive")
+    .optional(),
   soldTo: z.string().optional(),
   profit: z.number().optional(),
   pickedBy: z.string().min(1, "Picked By is required"),

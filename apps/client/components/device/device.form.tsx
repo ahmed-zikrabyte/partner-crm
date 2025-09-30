@@ -286,9 +286,17 @@ export default function DeviceForm({
 
       if (credit === undefined || perCredit === undefined) return;
 
-      const commission = credit * perCredit;
-      const totalCost = (cost || 0) + (extraAmount || 0) + commission + (gst || 0);
-      const profit = selling ? selling - totalCost : undefined;
+      // Convert to numbers for calculations
+      const creditNum = typeof credit === 'string' ? parseFloat(credit) || 0 : credit;
+      const perCreditNum = typeof perCredit === 'string' ? parseFloat(perCredit) || 0 : perCredit;
+      const costNum = typeof cost === 'string' ? parseFloat(cost) || 0 : cost || 0;
+      const extraAmountNum = typeof extraAmount === 'string' ? parseFloat(extraAmount) || 0 : extraAmount || 0;
+      const gstNum = typeof gst === 'string' ? parseFloat(gst) || 0 : gst || 0;
+      const sellingNum = typeof selling === 'string' ? parseFloat(selling) || 0 : selling;
+
+      const commission = creditNum * perCreditNum;
+      const totalCost = costNum + extraAmountNum + commission + gstNum;
+      const profit = sellingNum ? sellingNum - totalCost : undefined;
 
       if (commission !== values.commission) form.setValue("commission", commission);
       if (totalCost !== values.totalCost) form.setValue("totalCost", totalCost);
@@ -346,7 +354,7 @@ export default function DeviceForm({
                 {...field}
                 value={field.value?.toString() || ""}
                 readOnly={isReadOnly}
-                className={isReadOnly ? "bg-gray-50 text-gray-600" : ""}
+                className={isReadOnly ? "bg-gray-50 text-gray-600 cursor-not-allowed" : ""}
                 onChange={(e) =>
                   type === "number"
                     ? field.onChange(e.target.value === "" ? undefined : Number(e.target.value))
@@ -500,7 +508,7 @@ export default function DeviceForm({
                       placeholder="Enter any issues with the device"
                       {...field}
                       readOnly={mode === "view"}
-                      className={mode === "view" ? "bg-gray-50 text-gray-600" : ""}
+                      className={mode === "view" ? "bg-gray-50 text-gray-600 cursor-not-allowed" : ""}
                     />
                   </FormControl>
                   <FormMessage />
@@ -520,7 +528,7 @@ export default function DeviceForm({
                         <Input
                           value={currentUser?.name || ""}
                           readOnly
-                          className="bg-gray-50"
+                          className="bg-gray-50 cursor-not-allowed"
                         />
                       ) : (
                         <Select
@@ -534,7 +542,7 @@ export default function DeviceForm({
                           <SelectContent>
                             <div className="p-2">
                               <Input
-                                placeholder=""
+                                placeholder="Search employees..."
                                 value={employeeSearch}
                                 onChange={(e) => setEmployeeSearch(e.target.value)}
                                 className="mb-2"
@@ -643,7 +651,7 @@ export default function DeviceForm({
                 <Button
                   type="button"
                   onClick={handleAddTransaction}
-                  disabled={!form.getValues("soldTo") || !form.getValues("selling")}
+                  disabled={!form.watch("soldTo") || !form.watch("selling")}
                 >
                   Add Transaction
                 </Button>
@@ -704,7 +712,38 @@ export default function DeviceForm({
                   )}
                 />
                 <div className="grid grid-cols-2 gap-4">
-                  {renderInputField("selling", "Selling Cost", "number", mode === "view")}
+                  <FormField
+                    control={form.control}
+                    name="selling"
+                    render={({ field }) => {
+                      const isReadOnly = mode === "view" || (deviceState === "sold" && hasPreviouslySoldData);
+                      return (
+                        <FormItem>
+                          <FormLabel>Selling Cost</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="text"
+                              placeholder="Enter Selling Cost"
+                              value={field.value?.toString() ?? ""}
+                              readOnly={isReadOnly}
+                              className={isReadOnly ? "bg-gray-50 text-gray-600 cursor-not-allowed" : ""}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === "") {
+                                  field.onChange("");
+                                  return;
+                                }
+                                if (/^\d*\.?\d*$/.test(value)) {
+                                  field.onChange(value);
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
                   {renderDisplayField("profit", "Profit/Loss")}
                 </div>
               </>

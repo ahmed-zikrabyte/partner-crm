@@ -54,6 +54,7 @@ export default function VendorDetailsPage({
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
   const [vendorId, setVendorId] = useState<string>("");
   const [search, setSearch] = useState("");
+  const [deviceSearch, setDeviceSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -143,8 +144,9 @@ export default function VendorDetailsPage({
       cell: ({ row }) => {
         const device = row.original as any;
         const sellHistory = device.sellHistory?.filter((h: any) => h.type === 'sell') || [];
-        const latestSell = sellHistory.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-        return `₹${latestSell?.amount || device.selling || 0}`;
+        const latestSell = sellHistory.sort((a: any, b: any) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())[0];
+        const sellingPrice = latestSell?.selling || latestSell?.amount || device.selling || 0;
+        return `₹${sellingPrice}`;
       },
     },
     {
@@ -349,11 +351,38 @@ export default function VendorDetailsPage({
         <TabsContent value="devices">
           <Card>
             <CardHeader>
-              <CardTitle>Devices</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Devices</CardTitle>
+              </div>
+              
+              <div className="flex gap-3 items-center flex-wrap mt-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    placeholder="Search devices by ID, brand, model, or IMEI..."
+                    value={deviceSearch}
+                    onChange={(e) => setDeviceSearch(e.target.value)}
+                    className="pl-10 w-80"
+                  />
+                </div>
+                
+                <Button 
+                  variant="outline" 
+                  onClick={() => setDeviceSearch("")}
+                >
+                  Clear Search
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <DataTable
-                data={devices}
+                data={devices.filter(device => 
+                  !deviceSearch || 
+                  device.deviceId?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
+                  device.brand?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
+                  device.model?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
+                  device.imei1?.toLowerCase().includes(deviceSearch.toLowerCase())
+                )}
                 columns={deviceColumns}
                 pagination={{
                   currentPage: 1,
