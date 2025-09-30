@@ -2,7 +2,6 @@ import axiosInstance from "@/lib/axios";
 
 export interface DevicePayload {
   partnerId: string;
-  vendorId: string;
   companyIds: string;
   date?: string;
   serviceNumber: string;
@@ -45,9 +44,10 @@ export const getAllDevices = async ({
   limit,
   isActive,
   companyIds,
-  vendorId,
   pickedBy,
   deviceType,
+  startDate,
+  endDate,
   filter,
 }: {
   search?: string;
@@ -55,20 +55,22 @@ export const getAllDevices = async ({
   limit?: number; // if limit = 0 → fetch all
   isActive?: boolean;
   companyIds?: string;
-  vendorId?: string;
   pickedBy?: string;
-  deviceType?: 'sold' | 'new';
+  deviceType?: 'sold' | 'new' | 'return';
+  startDate?: string;
+  endDate?: string;
   filter?: any;
 } = {}) => {
   try {
-    const params: any = { search, page, limit, isActive, companyIds, vendorId, pickedBy };
+    const params: any = { search, page, limit, isActive, companyIds, pickedBy };
     
     // Build filter object
     const filterObj: any = { ...filter };
     if (deviceType) filterObj.deviceType = deviceType;
     if (pickedBy) filterObj.pickedBy = pickedBy;
     if (companyIds) filterObj.companyIds = companyIds;
-    if (vendorId) filterObj.vendorId = vendorId;
+    if (startDate) filterObj.startDate = startDate;
+    if (endDate) filterObj.endDate = endDate;
     
     if (Object.keys(filterObj).length > 0) {
       params.filter = JSON.stringify(filterObj);
@@ -146,19 +148,22 @@ export const getEmployeesForPartner = async () => {
 
 // ✅ Export sold devices
 export const exportSoldDevices = async ({
-  vendorId,
   companyIds,
   pickedBy,
+  startDate,
+  endDate,
 }: {
-  vendorId?: string;
   companyIds?: string;
   pickedBy?: string;
+  startDate?: string;
+  endDate?: string;
 } = {}) => {
   try {
     const params: any = {};
-    if (vendorId) params.vendorId = vendorId;
     if (companyIds) params.companyIds = companyIds;
     if (pickedBy) params.pickedBy = pickedBy;
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
     
     const response = await axiosInstance.get("/partner/devices/export/sold", {
       params,
@@ -172,19 +177,22 @@ export const exportSoldDevices = async ({
 
 // ✅ Export new devices
 export const exportNewDevices = async ({
-  vendorId,
   companyIds,
   pickedBy,
+  startDate,
+  endDate,
 }: {
-  vendorId?: string;
   companyIds?: string;
   pickedBy?: string;
+  startDate?: string;
+  endDate?: string;
 } = {}) => {
   try {
     const params: any = {};
-    if (vendorId) params.vendorId = vendorId;
     if (companyIds) params.companyIds = companyIds;
     if (pickedBy) params.pickedBy = pickedBy;
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
     
     const response = await axiosInstance.get("/partner/devices/export/new", {
       params,
@@ -192,6 +200,35 @@ export const exportNewDevices = async ({
     return response.data;
   } catch (error) {
     console.error("Error exporting new devices:", error);
+    throw error;
+  }
+};
+
+// ✅ Export return devices
+export const exportReturnDevices = async ({
+  companyIds,
+  pickedBy,
+  startDate,
+  endDate,
+}: {
+  companyIds?: string;
+  pickedBy?: string;
+  startDate?: string;
+  endDate?: string;
+} = {}) => {
+  try {
+    const params: any = {};
+    if (companyIds) params.companyIds = companyIds;
+    if (pickedBy) params.pickedBy = pickedBy;
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    
+    const response = await axiosInstance.get("/partner/devices/export/return", {
+      params,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error exporting return devices:", error);
     throw error;
   }
 };

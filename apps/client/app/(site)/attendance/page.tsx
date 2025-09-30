@@ -25,6 +25,7 @@ import { getAllEmployees } from "../../../services/employeeService";
 interface AttendanceEmployee extends Employee {
   attendanceData: Record<string, "Present" | "Absent" | "Not Marked">;
   totalWorkingDays: number;
+  salaryPerDay: number;
 }
 
 export default function AttendancePage() {
@@ -46,13 +47,15 @@ export default function AttendancePage() {
 
   // Generate dates for the selected month
   const getDatesInMonth = (monthString: string) => {
-    const year = parseInt(monthString.split("-")[0] || "0");
-    const month = parseInt(monthString.split("-")[1] || "0") - 1;
-    const datesInMonth = new Date(year, month + 1, 0).getDate();
+    const [yearStr, monthStr] = monthString.split("-");
+    if (!yearStr || !monthStr) return [];
+    const year = parseInt(yearStr);
+    const month = parseInt(monthStr);
+    const datesInMonth = new Date(year, month, 0).getDate();
 
     return Array.from({ length: datesInMonth }, (_, i) => {
-      const date = new Date(year, month, i + 1);
-      return date.toISOString().split("T")[0];
+      const day = (i + 1).toString().padStart(2, '0');
+      return `${year}-${monthStr}-${day}`;
     });
   };
 
@@ -69,10 +72,12 @@ export default function AttendancePage() {
       });
 
       const startDate = `${selectedMonth}-01`;
-      const year = parseInt(selectedMonth.split("-")[0] || "0");
-      const month = parseInt(selectedMonth.split("-")[1] || "0") - 1;
-      const endDate =
-        new Date(year, month + 1, 0).toISOString().split("T")[0] || "";
+      const [yearStr, monthStr] = selectedMonth.split("-");
+      if (!yearStr || !monthStr) return;
+      const year = parseInt(yearStr);
+      const month = parseInt(monthStr);
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${year}-${monthStr}-${lastDay.toString().padStart(2, '0')}`;
 
       // Get bulk attendance data for all employees and all dates in the month
       const bulkAttendanceRes = await attendanceService.getBulkAttendance(
@@ -354,6 +359,9 @@ export default function AttendancePage() {
                     <th className="text-center p-3 font-medium min-w-[100px] bg-blue-50">
                       Working Days
                     </th>
+                    <th className="text-center p-3 font-medium min-w-[120px] bg-green-50">
+                      Total Salary
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -370,7 +378,7 @@ export default function AttendancePage() {
                           <div>
                             <div className="font-medium">{employee.name}</div>
                             <div className="text-xs text-muted-foreground">
-                              {employee.email}
+                              {employee.phone}
                             </div>
                           </div>
                         </div>
@@ -457,6 +465,14 @@ export default function AttendancePage() {
                           className="bg-blue-100 text-blue-800"
                         >
                           {employee.totalWorkingDays} / {totalDaysInMonth}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-center bg-green-50 font-medium">
+                        <Badge
+                          variant="secondary"
+                          className="bg-green-100 text-green-800"
+                        >
+                          ₹{((employee.salaryPerDay || 0) * employee.totalWorkingDays).toLocaleString()}
                         </Badge>
                       </td>
                     </tr>

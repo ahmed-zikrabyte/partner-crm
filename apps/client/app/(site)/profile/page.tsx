@@ -55,7 +55,7 @@ export default function ProfilePage() {
       <h1 className="text-2xl font-bold mb-6">My Profile</h1>
       
       <Card>
-        <CardHeader className="pb-4">
+        <CardHeader className="">
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
             Personal Information

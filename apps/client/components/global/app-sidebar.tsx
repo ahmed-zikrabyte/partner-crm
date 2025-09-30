@@ -120,7 +120,7 @@ export function AppSidebar() {
             </SidebarGroupLabel>
 
             {/* MENU */}
-            <SidebarGroupContent className=" mt-2">
+            <SidebarGroupContent className="mt-2">
               {filteredItems.length > 0 ? (
                 <SidebarMenu>
                   {filteredItems.map((item) => {

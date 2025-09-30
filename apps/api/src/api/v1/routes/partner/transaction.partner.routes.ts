@@ -14,6 +14,11 @@ transactionRouter.get("/", (req: Request, res: Response, next: NextFunction) =>
   transactionController.getAll(req, res, next)
 );
 
+// Export transactions
+transactionRouter.get("/export/all", (req: Request, res: Response, next: NextFunction) =>
+  transactionController.exportTransactions(req, res, next)
+);
+
 // Get transaction by ID
 transactionRouter.get("/:id", (req: Request, res: Response, next: NextFunction) =>
   transactionController.getById(req, res, next)

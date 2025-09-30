@@ -217,18 +217,23 @@ export default function EmployeeForm({
               <FormLabel>Salary Per Day</FormLabel>
               <FormControl>
                 <Input
-                  type="number"
+                  type="text"
                   placeholder="Enter salary per day"
-                  {...field}
-                  value={field.value?.toString() || ""}
+                  value={field.value?.toString() ?? ""}
                   readOnly={mode === "view"}
-                  style={{ MozAppearance: "textfield" }}
-                  className="[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  onChange={(e) =>
-                    field.onChange(
-                      e.target.value === "" ? undefined : Number(e.target.value)
-                    )
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    if (value === "") {
+                      field.onChange("");
+                      return;
+                    }
+
+                    // allow numbers + decimal point in progress
+                    if (/^\d*\.?\d*$/.test(value)) {
+                      field.onChange(value);
+                    }
+                  }}
                 />
               </FormControl>
               <FormMessage />
