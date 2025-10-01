@@ -2,7 +2,14 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, IndianRupee, Download, Share2, QrCode } from "lucide-react";
+import {
+  ArrowLeft,
+  IndianRupee,
+  Download,
+  Share2,
+  QrCode,
+  Printer,
+} from "lucide-react";
 import { QRCodeComponent } from "@workspace/ui/components/qr-code";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -91,39 +98,123 @@ export default function DeviceDetailsPage() {
     return employee?.name || id;
   };
 
-  const downloadQRCode = () => {
-    const canvas = document.querySelector('canvas');
-    if (canvas) {
-      // Create a new canvas with company name
-      const downloadCanvas = document.createElement('canvas');
-      const ctx = downloadCanvas.getContext('2d');
+  const createQRCanvas = () => {
+    const canvas = document.querySelector("canvas");
+    if (!canvas) return null;
+
+    const downloadCanvas = document.createElement("canvas");
+    const ctx = downloadCanvas.getContext("2d");
+
+    if (ctx) {
+      const selectedCompanyIds = device.selectedCompanyIds || "N/A";
+      const model = device.model || "N/A";
+      const padding = 4;
+      const borderRadius = 8;
+      const containerPadding = 10;
       
-      if (ctx) {
-        const companyName = getCompanyName(device.companyIds);
-        const padding = 20;
-        const textHeight = 30;
-        
-        downloadCanvas.width = canvas.width + (padding * 2);
-        downloadCanvas.height = canvas.height + textHeight + (padding * 2);
-        
-        // Fill white background
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, downloadCanvas.width, downloadCanvas.height);
-        
-        // Add company name
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(companyName, downloadCanvas.width / 2, padding + 20);
-        
-        // Add QR code
-        ctx.drawImage(canvas, padding, textHeight + padding);
-        
-        const link = document.createElement('a');
-        link.href = downloadCanvas.toDataURL();
-        link.download = `${companyName}-device-${device.deviceId}-qr.png`;
-        link.click();
+      downloadCanvas.width = canvas.width + (containerPadding * 2);
+      downloadCanvas.height = canvas.height + 40 + (containerPadding * 2);
+
+      // Fill outer background
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, downloadCanvas.width, downloadCanvas.height);
+
+      // Draw container without border
+      const containerX = containerPadding;
+      const containerY = containerPadding;
+      const containerWidth = downloadCanvas.width - (containerPadding * 2);
+      const containerHeight = downloadCanvas.height - (containerPadding * 2);
+      
+      // Container background only
+      ctx.fillStyle = "white";
+      ctx.fillRect(containerX, containerY, containerWidth, containerHeight);
+
+      // Add selectedCompanyIds at top
+      ctx.fillStyle = "black";
+      ctx.font = "bold 12px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(selectedCompanyIds, downloadCanvas.width / 2, containerY + 15);
+
+      // Add QR code (centered)
+      const qrX = (downloadCanvas.width - canvas.width) / 2;
+      ctx.drawImage(canvas, qrX, containerY + 20);
+
+      // Add model at bottom (with text wrapping)
+      ctx.font = "bold 12px Arial";
+      const maxWidth = 100;
+      const words = model.split(' ');
+      let line = '';
+      let y = containerY + canvas.height + 35;
+      
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        const testWidth = metrics.width;
+        if (testWidth > maxWidth && n > 0) {
+          ctx.fillText(line, downloadCanvas.width / 2, y);
+          line = words[n] + ' ';
+          y += 12;
+        } else {
+          line = testLine;
+        }
       }
+      ctx.fillText(line, downloadCanvas.width / 2, y);
+
+      return downloadCanvas;
+    }
+    return null;
+  };
+
+  const downloadQRCode = () => {
+    const downloadCanvas = createQRCanvas();
+    if (downloadCanvas) {
+      const selectedCompanyIds = device.selectedCompanyIds || "device";
+      const link = document.createElement("a");
+      link.href = downloadCanvas.toDataURL();
+      link.download = `${selectedCompanyIds}-${device.model}-qr.png`;
+      link.click();
+    }
+  };
+
+  const printQRCode = () => {
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>QR Code - ${device.selectedCompanyIds || "Device"}</title>
+            <style>
+              @page { size: A4; margin: 0.5in; }
+              body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+              .qr-container { background: white; padding: 4px; border-radius: 8px; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); border: 2px solid #f3f4f6; text-align: center; max-width: 120px; }
+              .company-text { font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+              .model-text { font-weight: 600; font-size: 12px; margin-top: 4px; word-break: break-words; max-width: 100px; margin-left: auto; margin-right: auto; line-height: 1.2; }
+              .qr-wrapper { display: flex; justify-content: center; }
+            </style>
+          </head>
+          <body>
+            <div class="qr-container">
+              <h3 class="company-text">${device.selectedCompanyIds || "N/A"}</h3>
+              <div class="qr-wrapper">
+                <canvas id="qr-canvas"></canvas>
+              </div>
+              <p class="model-text">${device.model || "N/A"}</p>
+            </div>
+            <script>
+              const canvas = document.getElementById('qr-canvas');
+              const originalCanvas = window.opener.document.querySelector('canvas');
+              if (originalCanvas && canvas) {
+                canvas.width = originalCanvas.width;
+                canvas.height = originalCanvas.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(originalCanvas, 0, 0);
+              }
+              setTimeout(() => window.print(), 100);
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
     }
   };
 
@@ -163,17 +254,22 @@ export default function DeviceDetailsPage() {
                     <DialogTitle>Device QR Code</DialogTitle>
                   </DialogHeader>
                   <div className="flex flex-col items-center space-y-4 p-4">
-                    <div className="text-center">
-                      <h3 className="font-semibold text-lg mb-3">{getCompanyName(device.companyIds)}</h3>
+                    <div id="qr-print-section" className="bg-white p-1 rounded-lg shadow-inner border-2 border-gray-100">
+                      <h3 className="text-center font-semibold text-xs">
+                        {device.selectedCompanyIds || "N/A"}
+                      </h3>
+                      <div className="flex justify-center">
+                        <QRCodeComponent
+                          value={`${process.env.NEXT_PUBLIC_CLIENT_URL || window.location.origin}/qr/device/${device._id}`}
+                          size={100}
+                        />
+                      </div>
+                      <p className="text-center text-xs font-semibold break-words max-w-[100px] mx-auto leading-tight">
+                        {device.model || "N/A"}
+                      </p>
                     </div>
-                    <div className="bg-white p-3 rounded-lg shadow-inner border-2 border-gray-100">
-                      <QRCodeComponent 
-                        value={`${process.env.NEXT_PUBLIC_CLIENT_URL || window.location.origin}/qr/device/${device._id}`}
-                        size={180}
-                      />
-                    </div>
-                    <div className="text-center space-y-2">
-                      <p className="text-sm text-gray-600">
+                    <div className="text-center space-y-1">
+                      <p className="text-xs text-gray-600">
                         Scan to view device details
                       </p>
                       <p className="text-xs text-gray-500">
@@ -189,6 +285,15 @@ export default function DeviceDetailsPage() {
                       >
                         <Download className="w-4 h-4 mr-2" />
                         Download
+                      </Button>
+                      <Button
+                        onClick={printQRCode}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                      >
+                        <Printer className="w-4 h-4 mr-2" />
+                        Print
                       </Button>
                     </div>
                   </div>
@@ -348,10 +453,17 @@ export default function DeviceDetailsPage() {
                       </label>
                       <p className="text-base font-semibold text-gray-900 mt-1 capitalize">
                         {(() => {
-                          if (!device.sellHistory || device.sellHistory.length === 0) return "New";
-                          const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+                          if (
+                            !device.sellHistory ||
+                            device.sellHistory.length === 0
+                          )
+                            return "New";
+                          const lastEntry =
+                            device.sellHistory[device.sellHistory.length - 1];
                           if (!lastEntry) return "New";
-                          return lastEntry.type === "sell" ? "Sold" : "Returned";
+                          return lastEntry.type === "sell"
+                            ? "Sold"
+                            : "Returned";
                         })()}
                       </p>
                     </div>
@@ -361,10 +473,18 @@ export default function DeviceDetailsPage() {
                       </label>
                       <p className="text-base font-semibold text-gray-900 mt-1 capitalize">
                         {(() => {
-                          if (!device.sellHistory || device.sellHistory.length === 0) return "-";
-                          const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+                          if (
+                            !device.sellHistory ||
+                            device.sellHistory.length === 0
+                          )
+                            return "-";
+                          const lastEntry =
+                            device.sellHistory[device.sellHistory.length - 1];
                           if (!lastEntry) return "-";
-                          const vendorId = typeof lastEntry.vendor === 'object' ? lastEntry.vendor._id : lastEntry.vendor;
+                          const vendorId =
+                            typeof lastEntry.vendor === "object"
+                              ? lastEntry.vendor._id
+                              : lastEntry.vendor;
                           return getVendorName(vendorId);
                         })()}
                       </p>
@@ -374,7 +494,8 @@ export default function DeviceDetailsPage() {
                         Return Count
                       </label>
                       <p className="text-base font-semibold text-gray-900 mt-1">
-                        {device.sellHistory?.filter(h => h.type === 'return').length || 0}
+                        {device.sellHistory?.filter((h) => h.type === "return")
+                          .length || 0}
                       </p>
                     </div>
                   </div>
@@ -455,24 +576,43 @@ export default function DeviceDetailsPage() {
                     </p>
                   </div>
                   {(() => {
-                    if (!device.sellHistory || device.sellHistory.length === 0) return null;
-                    const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+                    if (!device.sellHistory || device.sellHistory.length === 0)
+                      return null;
+                    const lastEntry =
+                      device.sellHistory[device.sellHistory.length - 1];
                     if (!lastEntry) return null;
-                    const amount = lastEntry.selling || lastEntry.returnAmount || lastEntry.amount;
+                    const amount =
+                      lastEntry.selling ||
+                      lastEntry.returnAmount ||
+                      lastEntry.amount;
                     if (!amount) return null;
-                    
+
                     return (
-                      <div className={`p-3 rounded-lg ${
-                        lastEntry.type === 'sell' ? 'bg-emerald-50' : 'bg-red-50'
-                      }`}>
-                        <label className={`text-xs font-medium uppercase tracking-wide ${
-                          lastEntry.type === 'sell' ? 'text-emerald-600' : 'text-red-600'
-                        }`}>
-                          {lastEntry.type === 'sell' ? 'Latest Selling Price' : 'Latest Return Amount'}
+                      <div
+                        className={`p-3 rounded-lg ${
+                          lastEntry.type === "sell"
+                            ? "bg-emerald-50"
+                            : "bg-red-50"
+                        }`}
+                      >
+                        <label
+                          className={`text-xs font-medium uppercase tracking-wide ${
+                            lastEntry.type === "sell"
+                              ? "text-emerald-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {lastEntry.type === "sell"
+                            ? "Latest Selling Price"
+                            : "Latest Return Amount"}
                         </label>
-                        <p className={`text-lg font-semibold mt-1 ${
-                          lastEntry.type === 'sell' ? 'text-emerald-900' : 'text-red-900'
-                        }`}>
+                        <p
+                          className={`text-lg font-semibold mt-1 ${
+                            lastEntry.type === "sell"
+                              ? "text-emerald-900"
+                              : "text-red-900"
+                          }`}
+                        >
                           ₹{amount}
                         </p>
                       </div>
@@ -508,30 +648,59 @@ export default function DeviceDetailsPage() {
                 <CardContent>
                   <div className="space-y-3">
                     {device.sellHistory.map((transaction, index) => (
-                      <div key={index} className={`p-4 rounded-lg border-l-4 ${
-                        transaction.type === 'sell' 
-                          ? 'bg-green-50 border-green-400' 
-                          : 'bg-red-50 border-red-400'
-                      }`}>
+                      <div
+                        key={index}
+                        className={`p-4 rounded-lg border-l-4 ${
+                          transaction.type === "sell"
+                            ? "bg-green-50 border-green-400"
+                            : "bg-red-50 border-red-400"
+                        }`}
+                      >
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <Badge variant={transaction.type === 'sell' ? 'default' : 'destructive'}>
-                                {transaction.type === 'sell' ? 'SOLD' : 'RETURNED'}
+                              <Badge
+                                variant={
+                                  transaction.type === "sell"
+                                    ? "default"
+                                    : "destructive"
+                                }
+                              >
+                                {transaction.type === "sell"
+                                  ? "SOLD"
+                                  : "RETURNED"}
                               </Badge>
                               <span className="text-sm text-gray-500">
-                                {new Date(transaction.createdAt).toLocaleDateString()}
+                                {new Date(
+                                  transaction.createdAt
+                                ).toLocaleDateString()}
                               </span>
                             </div>
                             <p className="font-medium text-gray-900">
-                              {transaction.type === 'sell' ? 'Sold to' : 'Returned from'}: {getVendorName(typeof transaction.vendor === 'object' ? transaction.vendor._id : transaction.vendor)}
+                              {transaction.type === "sell"
+                                ? "Sold to"
+                                : "Returned from"}
+                              :{" "}
+                              {getVendorName(
+                                typeof transaction.vendor === "object"
+                                  ? transaction.vendor._id
+                                  : transaction.vendor
+                              )}
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className={`text-lg font-bold ${
-                              transaction.type === 'sell' ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              ₹{transaction.selling || transaction.returnAmount || transaction.amount || 0}
+                            <p
+                              className={`text-lg font-bold ${
+                                transaction.type === "sell"
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              }`}
+                            >
+                              ₹
+                              {transaction.selling ||
+                                transaction.returnAmount ||
+                                transaction.amount ||
+                                0}
                             </p>
                           </div>
                         </div>
@@ -566,8 +735,10 @@ export default function DeviceDetailsPage() {
           onOpenChange={setTransactionDialogOpen}
           entityId={(() => {
             const lastEntry = device.sellHistory[device.sellHistory.length - 1];
-            if (!lastEntry) return '';
-            return typeof lastEntry.vendor === 'object' ? lastEntry.vendor._id : lastEntry.vendor || '';
+            if (!lastEntry) return "";
+            return typeof lastEntry.vendor === "object"
+              ? lastEntry.vendor._id
+              : lastEntry.vendor || "";
           })()}
           entityType="vendor"
           onSuccess={() => {
