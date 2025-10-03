@@ -34,12 +34,14 @@ export interface DataTableProps<TData, TValue> {
     totalPages: number;
   };
   onPaginationChange?: (newPage: number) => void;
+  loading?: boolean;
 }
 export function DataTable<TData, TValue>({
   onPaginationChange,
   columns,
   data,
   pagination,
+  loading,
 }: DataTableProps<TData, TValue>) {
   const { currentPage, hasNext, hasPrev, totalPages } =
     pagination || {};
@@ -115,7 +117,7 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results.
+                  {loading ? "Loading..." : "No results."}
                 </TableCell>
               </TableRow>
             )}

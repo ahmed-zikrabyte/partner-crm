@@ -19,12 +19,12 @@ export default class TransactionService {
     amount: number;
     note?: string;
     paymentMode?: "upi" | "card" | "cash";
-    type: "return" | "sell" | "credit" | "debit";
+    type: "return" | "sell" | "credit" | "debit" | "investment";
     date?: Date;
   }): Promise<ServiceResponse> {
     try {
       const requiredFields = ["partnerId", "author", "amount", "type"];
-      if ((entry.type === "sell" || entry.type === "return") && !entry.vendorId) {
+      if ((entry.type === "sell" || entry.type === "return" || entry.type === "investment") && !entry.vendorId) {
         requiredFields.push("vendorId");
       }
       if (entry.type === "return" && !entry.deviceId) {
@@ -124,6 +124,17 @@ export default class TransactionService {
         }
       }
 
+      // Handle investment transaction
+      if (entry.type === "investment") {
+        if (!entry.vendorId) throw new AppError("vendorId is required for investment", HTTP.BAD_REQUEST);
+        
+        await VendorModel.findByIdAndUpdate(entry.vendorId, { $inc: { amount: -entry.amount } });
+        
+        if (entry.paymentMode === "cash") {
+          await PartnerModel.findByIdAndUpdate(entry.partnerId, { $inc: { cashAmount: entry.amount } });
+        }
+      }
+
       // Handle internal partner transactions (credit/debit)
       if (entry.type === "credit") {
         await PartnerModel.findByIdAndUpdate(entry.partnerId, { $inc: { cashAmount: entry.amount } });
@@ -146,7 +157,7 @@ export default class TransactionService {
   async getAll(
     partnerId: string,
     vendorId?: string,
-    type?: "return" | "sell" | "credit" | "debit",
+    type?: "return" | "sell" | "credit" | "debit" | "investment",
     search?: string,
     startDate?: string,
     endDate?: string
@@ -226,7 +237,7 @@ export default class TransactionService {
     partnerId: string,
     filters?: {
       vendorId?: string;
-      type?: "return" | "sell" | "credit" | "debit";
+      type?: "return" | "sell" | "credit" | "debit" | "investment";
       startDate?: string;
       endDate?: string;
     }

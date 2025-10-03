@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { EditIcon, Eye, Trash, Download } from "lucide-react";
@@ -38,20 +38,27 @@ import { toast } from "sonner";
 export default function DevicePage() {
   const router = useRouter();
   const [devices, setDevices] = useState<DeviceData[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  // Separate state for better control
+  const [currentPage, setCurrentPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [activeTab, setActiveTab] = useState("new");
+  
   const [pagination, setPagination] = useState({
-    currentPage: 1,
     totalPages: 0,
     hasNext: false,
     hasPrev: false,
   });
-  const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("new");
+  
   const [filters, setFilters] = useState({
     companyIds: "",
     pickedBy: "",
     startDate: "",
     endDate: "",
   });
+  
   const [vendors, setVendors] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -60,82 +67,101 @@ export default function DevicePage() {
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [openToggleModal, setOpenToggleModal] = useState(false);
 
-  // Fetch devices
-  const fetchDevices = useCallback(async () => {
-    try {
-      let filter: any = {};
-      
-      // If there's a search term, search across all device types
-      if (search.trim()) {
-        // Don't filter by deviceType when searching
-      } else {
-        // Only apply tab filter when not searching
-        if (activeTab === "new") {
-          filter.deviceType = "new";
-        } else if (activeTab === "sold") {
-          filter.deviceType = "sold";
-        } else if (activeTab === "return") {
-          filter.deviceType = "return";
-        }
+  // Debounce search to avoid excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Fetch filter options once on mount
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const [vendorsRes, companiesRes, employeesRes] = await Promise.all([
+          getAllVendors({ limit: 0 }),
+          getAllCompanies({ limit: 0 }),
+          getEmployeesForPartner(),
+        ]);
+        setVendors(vendorsRes.data.vendors || []);
+        setCompanies(companiesRes.data.companies || []);
+        setEmployees(employeesRes.data || []);
+      } catch (err: any) {
+        console.error("Error fetching filter options:", err);
       }
+    };
 
-      // Add additional filters
-      if (filters.companyIds) filter.companyIds = filters.companyIds;
-      if (filters.pickedBy) filter.pickedBy = filters.pickedBy;
-      if (filters.startDate) filter.startDate = filters.startDate;
-      if (filters.endDate) filter.endDate = filters.endDate;
-
-      const response = await getAllDevices({
-        page: pagination.currentPage,
-        search,
-        filter,
-      });
-      
-      setDevices(response.data.devices);
-      setPagination(response.data.pagination);
-      
-      // If searching and devices found, auto-switch to appropriate tab
-      if (search.trim() && response.data.devices.length > 0) {
-        const firstDevice = response.data.devices[0];
-        const deviceType = getDeviceType(firstDevice);
-        if (deviceType && deviceType !== activeTab) {
-          setActiveTab(deviceType);
-        }
-      }
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.response?.data?.message || "Failed to fetch devices");
-    }
-  }, [pagination.currentPage, search, activeTab, filters]);
-
-  // Fetch filter options
-  const fetchFilterOptions = useCallback(async () => {
-    try {
-      const [vendorsRes, companiesRes, employeesRes] = await Promise.all([
-        getAllVendors({ limit: 0 }),
-        getAllCompanies({ limit: 0 }),
-        getEmployeesForPartner(),
-      ]);
-      setVendors(vendorsRes.data.vendors || []);
-      setCompanies(companiesRes.data.companies || []);
-      setEmployees(employeesRes.data || []);
-    } catch (err: any) {
-      console.error("Error fetching filter options:", err);
-    }
+    fetchFilterOptions();
   }, []);
 
+  // Fetch devices - simplified dependencies
   useEffect(() => {
+    const fetchDevices = async () => {
+      setLoading(true);
+      try {
+        let filter: any = {};
+        
+        // If there's a search term, search across all device types
+        if (debouncedSearch.trim()) {
+          // Don't filter by deviceType when searching
+        } else {
+          // Only apply tab filter when not searching
+          if (activeTab === "new") {
+            filter.deviceType = "new";
+          } else if (activeTab === "sold") {
+            filter.deviceType = "sold";
+          } else if (activeTab === "return") {
+            filter.deviceType = "return";
+          }
+        }
+
+        // Add additional filters
+        if (filters.companyIds) filter.companyIds = filters.companyIds;
+        if (filters.pickedBy) filter.pickedBy = filters.pickedBy;
+        if (filters.startDate) filter.startDate = filters.startDate;
+        if (filters.endDate) filter.endDate = filters.endDate;
+
+        const response = await getAllDevices({
+          page: currentPage,
+          search: debouncedSearch,
+          filter,
+        });
+        
+        setDevices(response.data.devices);
+        setPagination({
+          totalPages: response.data.pagination.totalPages,
+          hasNext: response.data.pagination.hasNext,
+          hasPrev: response.data.pagination.hasPrev,
+        });
+        
+        // If searching and devices found, auto-switch to appropriate tab
+        if (debouncedSearch.trim() && response.data.devices.length > 0) {
+          const firstDevice = response.data.devices[0];
+          const deviceType = getDeviceType(firstDevice);
+          if (deviceType && deviceType !== activeTab) {
+            setActiveTab(deviceType);
+          }
+        }
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err?.response?.data?.message || "Failed to fetch devices");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchDevices();
-    fetchFilterOptions();
-  }, [fetchDevices, fetchFilterOptions]);
+  }, [currentPage, debouncedSearch, activeTab, filters]);
 
   const handlePageChange = (page: number) => {
-    setPagination((prev) => ({ ...prev, currentPage: page }));
+    setCurrentPage(page);
   };
 
   const handleSearch = (value: string) => {
     setSearch(value);
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
   };
 
   // Helper function to determine device type
@@ -150,14 +176,56 @@ export default function DevicePage() {
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+    setCurrentPage(1);
     setFilters({ companyIds: "", pickedBy: "", startDate: "", endDate: "" });
   };
 
   const handleFilterChange = (key: string, value: string) => {
     const filterValue = value === "all" ? "" : value;
     setFilters((prev) => ({ ...prev, [key]: filterValue }));
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+    setCurrentPage(1);
+  };
+
+  const refreshData = async () => {
+    setLoading(true);
+    try {
+      let filter: any = {};
+      
+      if (debouncedSearch.trim()) {
+        // Don't filter by deviceType when searching
+      } else {
+        if (activeTab === "new") {
+          filter.deviceType = "new";
+        } else if (activeTab === "sold") {
+          filter.deviceType = "sold";
+        } else if (activeTab === "return") {
+          filter.deviceType = "return";
+        }
+      }
+
+      if (filters.companyIds) filter.companyIds = filters.companyIds;
+      if (filters.pickedBy) filter.pickedBy = filters.pickedBy;
+      if (filters.startDate) filter.startDate = filters.startDate;
+      if (filters.endDate) filter.endDate = filters.endDate;
+
+      const response = await getAllDevices({
+        page: currentPage,
+        search: debouncedSearch,
+        filter,
+      });
+      
+      setDevices(response.data.devices);
+      setPagination({
+        totalPages: response.data.pagination.totalPages,
+        hasNext: response.data.pagination.hasNext,
+        hasPrev: response.data.pagination.hasPrev,
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.response?.data?.message || "Failed to fetch devices");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleExport = async () => {
@@ -208,7 +276,7 @@ export default function DevicePage() {
       toast.success(
         `Device ${selectedDevice.isActive ? "deactivated" : "activated"} successfully`
       );
-      fetchDevices();
+      await refreshData();
       setOpenToggleModal(false);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to toggle status");
@@ -220,20 +288,18 @@ export default function DevicePage() {
     try {
       await deleteDevice(selectedDevice._id);
       toast.success("Device deleted successfully");
-      fetchDevices();
+      await refreshData();
       setOpenDeleteModal(false);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to delete device");
     }
   };
 
-
-
   const columns: ColumnDef<DeviceData>[] = [
     {
       accessorKey: "_id",
       header: "SL",
-      cell: ({ row }) => row.index + 1,
+      cell: ({ row }) => (currentPage - 1) * 10 + row.index + 1,
     },
     {
       accessorKey: "deviceId",
@@ -354,9 +420,7 @@ export default function DevicePage() {
           <div className="flex justify-between items-center">
             <div className="text-lg font-bold">Devices</div>
             <div className="flex gap-2">
-              <Button
-                onClick={() => router.push("/device/create")}
-              >
+              <Button onClick={() => router.push("/device/create")}>
                 Add Device
               </Button>
             </div>
@@ -443,13 +507,15 @@ export default function DevicePage() {
           <DataTable
             data={devices}
             columns={columns}
-            pagination={pagination}
+            pagination={{
+              currentPage,
+              ...pagination,
+            }}
             onPaginationChange={handlePageChange}
+            loading={loading}
           />
         </TabsContent>
       </Tabs>
-
-
 
       {/* Toggle Modal */}
       {openToggleModal && selectedDevice && (

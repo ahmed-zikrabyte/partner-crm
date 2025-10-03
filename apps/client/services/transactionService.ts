@@ -1,6 +1,6 @@
 import axiosInstance from "@/lib/axios";
 
-export type TransactionType = "return" | "sell" | "credit" | "debit";
+export type TransactionType = "return" | "sell" | "credit" | "debit" | "investment";
 
 export interface TransactionPayload {
   vendorId?: string;       // optional for internal transactions

@@ -25,7 +25,7 @@ interface TransactionForm {
   paymentMode: "upi" | "card" | "cash";
   amount: string;
   note: string;
-  type: "return" | "sell" | "credit" | "debit";
+  type: "return" | "sell" | "credit" | "debit" | "investment";
   deviceId?: string;
 }
 
@@ -91,7 +91,7 @@ export function AddTransactionDialog({
         return;
       }
 
-      if ((form.type === "sell" || form.type === "return") && !form.paymentMode) {
+      if ((form.type === "sell" || form.type === "return" || form.type === "investment") && !form.paymentMode) {
         toast.error("Please select payment mode");
         return;
       }
@@ -120,7 +120,7 @@ export function AddTransactionDialog({
         date: new Date().toISOString(),
       };
 
-      if (form.type === "sell" || form.type === "return") {
+      if (form.type === "sell" || form.type === "return" || form.type === "investment") {
         payload.paymentMode = form.paymentMode;
         payload.vendorId = entityType === "vendor" ? entityId : undefined;
       }
@@ -178,13 +178,14 @@ export function AddTransactionDialog({
                   <>
                     <SelectItem value="sell">Sell</SelectItem>
                     <SelectItem value="return">Return</SelectItem>
+                    <SelectItem value="investment">Investment</SelectItem>
                   </>
                 )}
               </SelectContent>
             </Select>
           </div>
 
-          {(form.type === "return" || form.type === "sell") && (
+          {(form.type === "return" || form.type === "sell" || form.type === "investment") && (
             <div>
               <Label className="mb-3" htmlFor="paymentMode">
                 Payment Mode

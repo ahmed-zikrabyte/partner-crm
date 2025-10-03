@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getAllTransactions, exportTransactions } from "@/services/transactionService";
 import { getPartnerProfile } from "@/services/authService";
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
@@ -19,7 +19,7 @@ interface Transaction {
   amount: number;
   note: string;
   paymentMode?: "cash" | "upi" | "card";
-  type: "return" | "sell" | "credit" | "debit";
+  type: "return" | "sell" | "credit" | "debit" | "investment";
   date: string;
   author: {
     authorType: "partner" | "employee";
@@ -29,32 +29,52 @@ interface Transaction {
 
 export default function CashbookPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [internalTransactions, setInternalTransactions] = useState<Transaction[]>([]);
   const [partner, setPartner] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  // All transactions filters
   const [typeFilter, setTypeFilter] = useState<"all" | "sell" | "return">("all");
-  const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  
+  // Internal transactions filters
   const [internalSearch, setInternalSearch] = useState("");
+  const [debouncedInternalSearch, setDebouncedInternalSearch] = useState("");
   const [internalStartDate, setInternalStartDate] = useState("");
   const [internalEndDate, setInternalEndDate] = useState("");
   const [internalTypeFilter, setInternalTypeFilter] = useState<"all" | "credit" | "debit">("all");
+  
+  const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
 
+  // Debounce all transactions search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Debounce internal transactions search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedInternalSearch(internalSearch);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [internalSearch]);
+
+  // Fetch transactions when debounced search or dates change
   useEffect(() => {
     fetchCashTransactions();
-  }, [search, startDate, endDate]);
-
-  useEffect(() => {
-    filterTransactions();
-  }, [transactions, typeFilter, search, startDate, endDate]);
+  }, [debouncedSearch, startDate, endDate]);
 
   const fetchCashTransactions = async () => {
+    setLoading(true);
     try {
       const [transactionResponse, partnerResponse] = await Promise.all([
-        getAllTransactions({ search, startDate, endDate }),
+        getAllTransactions({ search: debouncedSearch, startDate, endDate }),
         getPartnerProfile()
       ]);
       
@@ -73,20 +93,72 @@ export default function CashbookPage() {
       setPartner(partnerResponse.data);
     } catch (error) {
       console.error("Error fetching data:", error);
+      toast.error("Failed to fetch transactions");
     } finally {
       setLoading(false);
     }
   };
 
-  const filterTransactions = () => {
+  // Memoized filtered transactions for "All Transactions" tab
+  const filteredTransactions = useMemo(() => {
     let filtered = transactions;
     
     if (typeFilter !== "all") {
       filtered = filtered.filter(t => t.type === typeFilter);
     }
     
-    setFilteredTransactions(filtered);
-  };
+    return filtered;
+  }, [transactions, typeFilter]);
+
+  // Memoized filtered internal transactions
+  const filteredInternalTransactions = useMemo(() => {
+    return internalTransactions.filter(transaction => {
+      const matchesSearch = !debouncedInternalSearch || 
+                           transaction.note?.toLowerCase().includes(debouncedInternalSearch.toLowerCase()) ||
+                           transaction.author.authorId.name?.toLowerCase().includes(debouncedInternalSearch.toLowerCase());
+      
+      const matchesDateRange = (!internalStartDate || new Date(transaction.date) >= new Date(internalStartDate)) &&
+                              (!internalEndDate || new Date(transaction.date) <= new Date(internalEndDate));
+      
+      const matchesType = internalTypeFilter === "all" || transaction.type === internalTypeFilter;
+      
+      return matchesSearch && matchesDateRange && matchesType;
+    });
+  }, [internalTransactions, debouncedInternalSearch, internalStartDate, internalEndDate, internalTypeFilter]);
+
+  // Memoized calculations for "All Transactions" tab
+  const cashStats = useMemo(() => {
+    const totalIn = filteredTransactions
+      .filter(t => t.type === "sell")
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const totalOut = filteredTransactions
+      .filter(t => t.type === "return")
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    return {
+      totalCashIn: totalIn,
+      totalCashOut: totalOut,
+      netCash: totalIn - totalOut
+    };
+  }, [filteredTransactions]);
+
+  // Memoized calculations for "Internal Transactions" tab
+  const internalStats = useMemo(() => {
+    const totalCredit = filteredInternalTransactions
+      .filter(t => t.type === "credit")
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const totalDebit = filteredInternalTransactions
+      .filter(t => t.type === "debit")
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    return {
+      totalCredit,
+      totalDebit,
+      netInternal: totalCredit - totalDebit
+    };
+  }, [filteredInternalTransactions]);
 
   const handleExport = async (tabType: "all" | "internal") => {
     try {
@@ -95,7 +167,6 @@ export default function CashbookPage() {
       if (endDate) filters.endDate = endDate;
       
       if (tabType === "internal") {
-        // Export only internal transactions
         const internalTypes = ["credit", "debit"];
         const promises = internalTypes.map(type => 
           exportTransactions({ ...filters, type: type as any })
@@ -106,7 +177,6 @@ export default function CashbookPage() {
         const csvContent = convertToCSV(combinedData);
         downloadCSV(csvContent, "internal-transactions");
       } else {
-        // Export cash transactions only
         const response = await exportTransactions(filters);
         const cashData = response.data.filter((t: any) => 
           t["Payment Mode"] === "cash" || t["Type"] === "CREDIT" || t["Type"] === "DEBIT"
@@ -139,25 +209,19 @@ export default function CashbookPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  const totalCashIn = filteredTransactions
-    .filter(t => t.type === "sell")
-    .reduce((sum, t) => sum + t.amount, 0);
+  const clearAllFilters = () => {
+    setSearch("");
+    setStartDate("");
+    setEndDate("");
+    setTypeFilter("all");
+  };
 
-  const totalCashOut = filteredTransactions
-    .filter(t => t.type === "return")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const netCash = totalCashIn - totalCashOut;
-
-  const filteredInternalTransactions = internalTransactions.filter(transaction => {
-    const matchesSearch = transaction.note?.toLowerCase().includes(internalSearch.toLowerCase()) ||
-                         transaction.author.authorId.name?.toLowerCase().includes(internalSearch.toLowerCase());
-    const matchesDateRange = (!internalStartDate || new Date(transaction.date) >= new Date(internalStartDate)) &&
-                            (!internalEndDate || new Date(transaction.date) <= new Date(internalEndDate));
-    const matchesType = internalTypeFilter === "all" || transaction.type === internalTypeFilter;
-    
-    return matchesSearch && matchesDateRange && matchesType;
-  });
+  const clearInternalFilters = () => {
+    setInternalSearch("");
+    setInternalStartDate("");
+    setInternalEndDate("");
+    setInternalTypeFilter("all");
+  };
 
   if (loading) {
     return <div className="p-6">Loading cash transactions...</div>;
@@ -240,15 +304,7 @@ export default function CashbookPage() {
                 </SelectContent>
               </Select>
               
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setSearch("");
-                  setStartDate("");
-                  setEndDate("");
-                  setTypeFilter("all");
-                }}
-              >
+              <Button variant="outline" onClick={clearAllFilters}>
                 Clear Filters
               </Button>
             </div>
@@ -260,7 +316,7 @@ export default function CashbookPage() {
                 <CardTitle className="text-sm font-medium text-green-600">Cash In (Sales)</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">₹{totalCashIn.toLocaleString()}</div>
+                <div className="text-2xl font-bold">₹{cashStats.totalCashIn.toLocaleString()}</div>
               </CardContent>
             </Card>
             <Card>
@@ -268,7 +324,7 @@ export default function CashbookPage() {
                 <CardTitle className="text-sm font-medium text-red-600">Cash Out (Returns)</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">₹{totalCashOut.toLocaleString()}</div>
+                <div className="text-2xl font-bold">₹{cashStats.totalCashOut.toLocaleString()}</div>
               </CardContent>
             </Card>
             <Card>
@@ -276,8 +332,8 @@ export default function CashbookPage() {
                 <CardTitle className="text-sm font-medium">Net Cash</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${netCash >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ₹{netCash.toLocaleString()}
+                <div className={`text-2xl font-bold ${cashStats.netCash >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ₹{cashStats.netCash.toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -367,19 +423,12 @@ export default function CashbookPage() {
                 </SelectContent>
               </Select>
               
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setInternalSearch("");
-                  setInternalStartDate("");
-                  setInternalEndDate("");
-                  setInternalTypeFilter("all");
-                }}
-              >
+              <Button variant="outline" onClick={clearInternalFilters}>
                 Clear Filters
               </Button>
             </div>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardHeader className="pb-2">
@@ -387,7 +436,7 @@ export default function CashbookPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ₹{filteredInternalTransactions.filter(t => t.type === "credit").reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
+                  ₹{internalStats.totalCredit.toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -397,7 +446,7 @@ export default function CashbookPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ₹{filteredInternalTransactions.filter(t => t.type === "debit").reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
+                  ₹{internalStats.totalDebit.toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -406,15 +455,8 @@ export default function CashbookPage() {
                 <CardTitle className="text-sm font-medium">Net Internal</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${
-                  (filteredInternalTransactions.filter(t => t.type === "credit").reduce((sum, t) => sum + t.amount, 0) - 
-                   filteredInternalTransactions.filter(t => t.type === "debit").reduce((sum, t) => sum + t.amount, 0)) >= 0 
-                  ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  ₹{(
-                    filteredInternalTransactions.filter(t => t.type === "credit").reduce((sum, t) => sum + t.amount, 0) - 
-                    filteredInternalTransactions.filter(t => t.type === "debit").reduce((sum, t) => sum + t.amount, 0)
-                  ).toLocaleString()}
+                <div className={`text-2xl font-bold ${internalStats.netInternal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ₹{internalStats.netInternal.toLocaleString()}
                 </div>
               </CardContent>
             </Card>

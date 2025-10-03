@@ -11,7 +11,7 @@ export default class TransactionController {
     const { vendorId, deviceId, amount, note, paymentMode, type, date } = req.body;
 
     // Validate type
-    if (!["sell", "return", "credit", "debit"].includes(type)) {
+    if (!["sell", "return", "credit", "debit", "investment"].includes(type)) {
       return ApiResponse.error({
         res,
         message: "Invalid transaction type",
@@ -47,7 +47,7 @@ export default class TransactionController {
     const { vendorId, type, search, startDate, endDate } = req.query;
 
     // Validate type filter
-    const validTypes = ["sell", "return", "credit", "debit"];
+    const validTypes = ["sell", "return", "credit", "debit", "investment"];
     const typeFilter = typeof type === "string" && validTypes.includes(type) ? type : undefined;
 
     const response = await this.transactionService.getAll(
@@ -93,7 +93,7 @@ export default class TransactionController {
     const { vendorId, type, startDate, endDate } = req.query;
 
     // Validate type filter
-    const validTypes = ["sell", "return", "credit", "debit"];
+    const validTypes = ["sell", "return", "credit", "debit", "investment"];
     const typeFilter = typeof type === "string" && validTypes.includes(type) ? type : undefined;
 
     const filters = {
