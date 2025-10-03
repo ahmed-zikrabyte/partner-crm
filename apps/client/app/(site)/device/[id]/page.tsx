@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   IndianRupee,
   Download,
-  Share2,
   QrCode,
   Printer,
 } from "lucide-react";
@@ -108,52 +107,58 @@ export default function DeviceDetailsPage() {
     if (ctx) {
       const selectedCompanyIds = device.selectedCompanyIds || "N/A";
       const model = device.model || "N/A";
-      const padding = 4;
-      const borderRadius = 8;
-      const containerPadding = 10;
-      
-      downloadCanvas.width = canvas.width + (containerPadding * 2);
-      downloadCanvas.height = canvas.height + 40 + (containerPadding * 2);
 
-      // Fill outer background
+      // Set exact dimensions for 1" x 1.5" at 300 DPI
+      const DPI = 300;
+      downloadCanvas.width = DPI; // 1 inch = 300px at 300 DPI
+      downloadCanvas.height = DPI * 1.5; // 1.5 inches = 450px at 300 DPI
+
+      // Fill white background
       ctx.fillStyle = "white";
       ctx.fillRect(0, 0, downloadCanvas.width, downloadCanvas.height);
 
-      // Draw container without border
-      const containerX = containerPadding;
-      const containerY = containerPadding;
-      const containerWidth = downloadCanvas.width - (containerPadding * 2);
-      const containerHeight = downloadCanvas.height - (containerPadding * 2);
-      
-      // Container background only
-      ctx.fillStyle = "white";
-      ctx.fillRect(containerX, containerY, containerWidth, containerHeight);
+      // Scale everything proportionally
+      const padding = 20;
+      const fontSize = 30; // Larger for 300 DPI
+      const lineHeight = 35;
 
-      // Add selectedCompanyIds at top
+      // Company ID at top
       ctx.fillStyle = "black";
-      ctx.font = "bold 12px Arial";
+      ctx.font = `bold ${fontSize}px Arial`;
       ctx.textAlign = "center";
-      ctx.fillText(selectedCompanyIds, downloadCanvas.width / 2, containerY + 15);
+      ctx.fillText(
+        selectedCompanyIds,
+        downloadCanvas.width / 2,
+        padding + fontSize
+      );
 
-      // Add QR code (centered)
-      const qrX = (downloadCanvas.width - canvas.width) / 2;
-      ctx.drawImage(canvas, qrX, containerY + 20);
+      // Calculate QR size to fit properly
+      const availableHeight =
+        downloadCanvas.height - padding * 2 - fontSize - 80;
+      const qrSize = Math.min(
+        downloadCanvas.width - padding * 2,
+        availableHeight
+      );
+      const qrX = (downloadCanvas.width - qrSize) / 2;
+      const qrY = padding + fontSize + 15;
 
-      // Add model at bottom (with text wrapping)
-      ctx.font = "bold 12px Arial";
-      const maxWidth = 100;
-      const words = model.split(' ');
-      let line = '';
-      let y = containerY + canvas.height + 35;
-      
+      // Draw QR code
+      ctx.drawImage(canvas, qrX, qrY, qrSize, qrSize);
+
+      // Model text at bottom
+      ctx.font = `bold ${fontSize}px Arial`;
+      const maxWidth = downloadCanvas.width - padding * 2;
+      const words = model.split(" ");
+      let line = "";
+      let y = qrY + qrSize + 40;
+
       for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
+        const testLine = line + words[n] + " ";
         const metrics = ctx.measureText(testLine);
-        const testWidth = metrics.width;
-        if (testWidth > maxWidth && n > 0) {
+        if (metrics.width > maxWidth && n > 0) {
           ctx.fillText(line, downloadCanvas.width / 2, y);
-          line = words[n] + ' ';
-          y += 12;
+          line = words[n] + " ";
+          y += lineHeight;
         } else {
           line = testLine;
         }
@@ -177,43 +182,53 @@ export default function DeviceDetailsPage() {
   };
 
   const printQRCode = () => {
+    const downloadCanvas = createQRCanvas();
+    if (!downloadCanvas) return;
+
     const printWindow = window.open("", "_blank");
     if (printWindow) {
+      const imageData = downloadCanvas.toDataURL("image/png");
+
       printWindow.document.write(`
-        <html>
-          <head>
-            <title>QR Code - ${device.selectedCompanyIds || "Device"}</title>
-            <style>
-              @page { size: A4; margin: 0.5in; }
-              body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
-              .qr-container { background: white; padding: 4px; border-radius: 8px; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); border: 2px solid #f3f4f6; text-align: center; max-width: 120px; }
-              .company-text { font-weight: 600; font-size: 12px; margin-bottom: 4px; }
-              .model-text { font-weight: 600; font-size: 12px; margin-top: 4px; word-break: break-words; max-width: 100px; margin-left: auto; margin-right: auto; line-height: 1.2; }
-              .qr-wrapper { display: flex; justify-content: center; }
-            </style>
-          </head>
-          <body>
-            <div class="qr-container">
-              <h3 class="company-text">${device.selectedCompanyIds || "N/A"}</h3>
-              <div class="qr-wrapper">
-                <canvas id="qr-canvas"></canvas>
-              </div>
-              <p class="model-text">${device.model || "N/A"}</p>
-            </div>
-            <script>
-              const canvas = document.getElementById('qr-canvas');
-              const originalCanvas = window.opener.document.querySelector('canvas');
-              if (originalCanvas && canvas) {
-                canvas.width = originalCanvas.width;
-                canvas.height = originalCanvas.height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(originalCanvas, 0, 0);
-              }
-              setTimeout(() => window.print(), 100);
-            </script>
-          </body>
-        </html>
-      `);
+      <html>
+        <head>
+          <title>QR Code - ${device.selectedCompanyIds || "Device"}</title>
+          <style>
+            @page { 
+              size: 1in 1.5in;
+              margin: 0;
+            }
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body { 
+              width: 1in;
+              height: 1.5in;
+              margin: 0;
+              padding: 0;
+              background: white;
+            }
+            img {
+              width: 1in;
+              height: 1.5in;
+              display: block;
+              object-fit: contain;
+            }
+          </style>
+        </head>
+        <body>
+          <img src="${imageData}" alt="QR Code" />
+          <script>
+            setTimeout(() => {
+              window.print();
+              window.onafterprint = () => window.close();
+            }, 250);
+          </script>
+        </body>
+      </html>
+    `);
       printWindow.document.close();
     }
   };
@@ -254,7 +269,10 @@ export default function DeviceDetailsPage() {
                     <DialogTitle>Device QR Code</DialogTitle>
                   </DialogHeader>
                   <div className="flex flex-col items-center space-y-4 p-4">
-                    <div id="qr-print-section" className="bg-white p-1 rounded-lg shadow-inner border-2 border-gray-100">
+                    <div
+                      id="qr-print-section"
+                      className="bg-white p-1 rounded-lg shadow-inner border-2 border-gray-100"
+                    >
                       <h3 className="text-center font-semibold text-xs">
                         {device.selectedCompanyIds || "N/A"}
                       </h3>
