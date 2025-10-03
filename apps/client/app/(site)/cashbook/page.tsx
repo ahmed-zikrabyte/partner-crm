@@ -53,7 +53,7 @@ export default function CashbookPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
-    }, 500);
+    }, 200);
     return () => clearTimeout(timer);
   }, [search]);
 
@@ -61,7 +61,7 @@ export default function CashbookPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedInternalSearch(internalSearch);
-    }, 500);
+    }, 200);
     return () => clearTimeout(timer);
   }, [internalSearch]);
 

@@ -55,7 +55,7 @@ export default function AttendancePage() {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
       setCurrentPage(1);
-    }, 500);
+    }, 200);
 
     return () => clearTimeout(timer);
   }, [search]);
