@@ -88,6 +88,7 @@ export default function DeviceForm({
   const [vendorSearch, setVendorSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [showTransactionDialog, setShowTransactionDialog] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [filteredVendors, setFilteredVendors] = useState<{ _id: string; name: string }[]>([]);
 
@@ -292,24 +293,32 @@ export default function DeviceForm({
       const costNum = typeof cost === 'string' ? parseFloat(cost) || 0 : cost || 0;
       const extraAmountNum = typeof extraAmount === 'string' ? parseFloat(extraAmount) || 0 : extraAmount || 0;
       const gstNum = typeof gst === 'string' ? parseFloat(gst) || 0 : gst || 0;
-      const sellingNum = typeof selling === 'string' ? parseFloat(selling) || 0 : selling;
+      const sellingNum = selling ? (typeof selling === 'string' ? parseFloat(selling) : selling) : undefined;
 
       const commission = creditNum * perCreditNum;
       const totalCost = costNum + extraAmountNum + commission + gstNum;
-      const profit = sellingNum ? sellingNum - totalCost : undefined;
+      const profit = sellingNum !== undefined ? sellingNum - totalCost : undefined;
 
       if (commission !== values.commission) form.setValue("commission", commission);
       if (totalCost !== values.totalCost) form.setValue("totalCost", totalCost);
-      if (profit !== values.profit) form.setValue("profit", profit);
+      if (!isSubmitting && profit !== values.profit) {
+        form.setValue("profit", profit);
+      }
     });
     return () => subscription.unsubscribe();
   }, [form]);
 
   const onSubmit = async (data: any) => {
     try {
+      setIsSubmitting(true);
       const cleanData = { ...data };
       if (cleanData.companyIds && typeof cleanData.companyIds === 'object') {
         cleanData.companyIds = cleanData.companyIds._id || cleanData.companyIds;
+      }
+      
+      // Convert selling to number if it's a string
+      if (cleanData.selling && typeof cleanData.selling === 'string') {
+        cleanData.selling = parseFloat(cleanData.selling) || undefined;
       }
 
       if (mode === "create") {
@@ -329,6 +338,8 @@ export default function DeviceForm({
         errorMessage = err.message;
       }
       toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -700,7 +711,7 @@ export default function DeviceForm({
                                   className="w-full"
                                   onClick={handleCreateVendor}
                                 >
-                                  Add "{vendorSearch}" as new vendor
+                                  Add &quot;{vendorSearch}&quot; as new vendor
                                 </Button>
                               </div>
                             )}
@@ -722,21 +733,11 @@ export default function DeviceForm({
                           <FormLabel>Selling Cost</FormLabel>
                           <FormControl>
                             <Input
+                              {...field}
                               type="text"
                               placeholder="Enter Selling Cost"
-                              value={field.value?.toString() ?? ""}
                               readOnly={isReadOnly}
                               className={isReadOnly ? "bg-gray-50 text-gray-600 cursor-not-allowed" : ""}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === "") {
-                                  field.onChange("");
-                                  return;
-                                }
-                                if (/^\d*\.?\d*$/.test(value)) {
-                                  field.onChange(value);
-                                }
-                              }}
                             />
                           </FormControl>
                           <FormMessage />
@@ -779,6 +780,12 @@ export default function DeviceForm({
         onOpenChange={setShowTransactionDialog}
         entityId={form.getValues("soldTo") || ""}
         entityType="vendor"
+        deviceContext={mode === "edit" && deviceId ? {
+          deviceId: deviceId,
+          sellHistory: defaultValues?.sellHistory || []
+        } : undefined}
+        mode={mode === "create" ? "add" : "edit"}
+        isNewDevice={mode === "create"}
         onSuccess={() => {
           toast.success("Transaction added successfully");
         }}

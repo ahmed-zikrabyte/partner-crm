@@ -44,11 +44,15 @@ export default class TransactionController {
 
   getAll = catchAsync(async (req: Request, res: Response) => {
     const partnerId = req.user!._id;
-    const { vendorId, type, search, startDate, endDate } = req.query;
+    const { vendorId, type, search, startDate, endDate, page, limit, paymentMode } = req.query;
 
     // Validate type filter
     const validTypes = ["sell", "return", "credit", "debit", "investment"];
     const typeFilter = typeof type === "string" && validTypes.includes(type) ? type : undefined;
+    
+    // Validate payment mode filter
+    const validPaymentModes = ["cash", "upi", "card"];
+    const paymentModeFilter = typeof paymentMode === "string" && validPaymentModes.includes(paymentMode) ? paymentMode : undefined;
 
     const response = await this.transactionService.getAll(
       partnerId as string,
@@ -56,7 +60,10 @@ export default class TransactionController {
       typeFilter as any,
       typeof search === "string" ? search : undefined,
       typeof startDate === "string" ? startDate : undefined,
-      typeof endDate === "string" ? endDate : undefined
+      typeof endDate === "string" ? endDate : undefined,
+      typeof page === "string" ? parseInt(page) : undefined,
+      typeof limit === "string" ? parseInt(limit) : undefined,
+      paymentModeFilter as any
     );
 
     return ApiResponse.success({

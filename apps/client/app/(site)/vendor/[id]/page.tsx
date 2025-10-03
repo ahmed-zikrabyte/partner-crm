@@ -69,12 +69,23 @@ export default function VendorDetailsPage({
           getAllTransactions({ vendorId: resolvedParams.id, search, startDate, endDate }),
         ]);
 
-        // Filter devices that have been sold to this vendor
-        const vendorDevices = devicesRes.data.devices?.filter((device: any) => 
-          device.sellHistory?.some((history: any) => 
-            history.type === 'sell' && history.vendor?._id === resolvedParams.id
-          )
-        ) || [];
+        // Filter devices based on latest transaction with this vendor
+        const vendorDevices = devicesRes.data.devices?.filter((device: any) => {
+          const sellHistory = device.sellHistory || [];
+          const vendorTransactions = sellHistory.filter((history: any) => 
+            history.vendor?._id === resolvedParams.id
+          );
+          
+          if (vendorTransactions.length === 0) return false;
+          
+          // Get the latest transaction with this vendor
+          const latestTransaction = vendorTransactions.sort((a: any, b: any) => 
+            new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime()
+          )[0];
+          
+          // Show device only if latest transaction is a sell
+          return latestTransaction.type === 'sell';
+        }) || [];
 
         setVendor(vendorRes.data);
         setDevices(vendorDevices);

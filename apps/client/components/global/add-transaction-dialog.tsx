@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import { useState, useEffect } from "react";
 import { Button } from "@workspace/ui/components/button";
@@ -35,6 +36,12 @@ interface AddTransactionDialogProps {
   entityId: string;
   entityType: "vendor" | "device" | "partner"; // partner added for internal
   onSuccess?: () => void;
+  deviceContext?: {
+    deviceId: string;
+    sellHistory?: any[];
+  };
+  mode?: "add" | "edit";
+  isNewDevice?: boolean;
 }
 
 export function AddTransactionDialog({
@@ -43,6 +50,9 @@ export function AddTransactionDialog({
   entityId,
   entityType,
   onSuccess,
+  deviceContext,
+  mode = "add",
+  isNewDevice = false,
 }: AddTransactionDialogProps) {
   const [form, setForm] = useState<TransactionForm>({
     paymentMode: "cash",
@@ -55,22 +65,37 @@ export function AddTransactionDialog({
   const [devices, setDevices] = useState<any[]>([]);
   const [deviceSearch, setDeviceSearch] = useState("");
 
+  const getInitialTransactionType = () => {
+    if (entityType === "partner") return "credit";
+    if (isNewDevice || !deviceContext) return "sell";
+    
+    const { sellHistory } = deviceContext;
+    if (!sellHistory || sellHistory.length === 0) return "sell";
+    
+    const latestHistory = sellHistory[sellHistory.length - 1];
+    return latestHistory.type === "sell" ? "return" : "sell";
+  };
+
   const resetForm = () => {
     setForm({
       paymentMode: "cash",
       amount: "",
       note: "",
-      type: entityType === "partner" ? "credit" : "sell",
-      deviceId: "",
+      type: getInitialTransactionType(),
+      deviceId: deviceContext?.deviceId || "",
     });
     setDeviceSearch("");
   };
 
   useEffect(() => {
-    if (entityType === "partner") {
-      setForm(prev => ({ ...prev, type: "credit" }));
+    if (open) {
+      setForm(prev => ({ 
+        ...prev, 
+        type: getInitialTransactionType(),
+        deviceId: deviceContext?.deviceId || ""
+      }));
     }
-  }, [entityType]);
+  }, [open, entityType, deviceContext]);
 
   useEffect(() => {
     const fetchDevices = async () => {
@@ -164,6 +189,7 @@ export function AddTransactionDialog({
               onValueChange={(value: TransactionForm["type"]) =>
                 setForm((prev) => ({ ...prev, type: value }))
               }
+              disabled={isNewDevice || (deviceContext && (!deviceContext.sellHistory || deviceContext.sellHistory.length === 0)) || (deviceContext && deviceContext.sellHistory && deviceContext.sellHistory.length > 0)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -174,6 +200,12 @@ export function AddTransactionDialog({
                     <SelectItem value="credit">Credit</SelectItem>
                     <SelectItem value="debit">Debit</SelectItem>
                   </>
+                ) : isNewDevice || (deviceContext && (!deviceContext.sellHistory || deviceContext.sellHistory.length === 0)) ? (
+                  <SelectItem value="sell">Sell</SelectItem>
+                ) : deviceContext ? (
+                  <SelectItem value={getInitialTransactionType()}>
+                    {getInitialTransactionType() === "sell" ? "Sell" : "Return"}
+                  </SelectItem>
                 ) : (
                   <>
                     <SelectItem value="sell">Sell</SelectItem>
@@ -208,7 +240,7 @@ export function AddTransactionDialog({
             </div>
           )}
 
-          {form.type === "return" && (
+          {form.type === "return" && !deviceContext && (
             <div>
               <Label className="mb-3" htmlFor="deviceId">
                 Device

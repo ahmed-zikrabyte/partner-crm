@@ -160,12 +160,16 @@ export default class TransactionService {
     type?: "return" | "sell" | "credit" | "debit" | "investment",
     search?: string,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    page?: number,
+    limit?: number,
+    paymentMode?: "cash" | "upi" | "card"
   ): Promise<ServiceResponse> {
     try {
       const query: any = { partnerId: new mongoose.Types.ObjectId(partnerId) };
       if (vendorId) query.vendorId = new mongoose.Types.ObjectId(vendorId);
       if (type) query.type = type;
+      if (paymentMode) query.paymentMode = paymentMode;
 
       // Date filtering
       if (startDate || endDate) {
@@ -181,28 +185,47 @@ export default class TransactionService {
         query.date = dateQuery;
       }
 
-      let transactions = await TransactionModel.find(query)
-        .populate("vendorId", "name")
-        .populate("deviceId", "deviceId brand model")
-        .populate("author.authorId", "name")
-        .sort({ date: -1 });
-
-      // Search filtering
+      // Search filtering in query
       if (search) {
         const searchRegex = new RegExp(search, "i");
-        transactions = transactions.filter(transaction => 
-          (transaction.vendorId as any)?.name?.match(searchRegex) ||
-          (transaction.deviceId as any)?.deviceId?.match(searchRegex) ||
-          (transaction.deviceId as any)?.brand?.match(searchRegex) ||
-          (transaction.deviceId as any)?.model?.match(searchRegex) ||
-          transaction.note?.match(searchRegex) ||
-          transaction.type?.match(searchRegex)
-        );
+        query.$or = [
+          { note: searchRegex },
+          { type: searchRegex }
+        ];
       }
+
+      // Pagination setup
+      const pageNum = page || 1;
+      const limitNum = limit || 10;
+      const skip = (pageNum - 1) * limitNum;
+
+      const [transactions, totalCount] = await Promise.all([
+        TransactionModel.find(query)
+          .populate("vendorId", "name")
+          .populate("deviceId", "deviceId brand model")
+          .populate("author.authorId", "name")
+          .sort({ date: -1 })
+          .skip(skip)
+          .limit(limitNum),
+        TransactionModel.countDocuments(query)
+      ]);
+
+      const totalPages = Math.ceil(totalCount / limitNum);
+      const hasNext = pageNum < totalPages;
+      const hasPrev = pageNum > 1;
 
       return {
         message: "Transactions fetched successfully",
-        data: transactions,
+        data: {
+          transactions,
+          pagination: {
+            currentPage: pageNum,
+            totalPages,
+            hasNext,
+            hasPrev,
+            totalCount
+          }
+        },
         status: HTTP.OK,
         success: true,
       };
@@ -240,6 +263,7 @@ export default class TransactionService {
       type?: "return" | "sell" | "credit" | "debit" | "investment";
       startDate?: string;
       endDate?: string;
+      search?: string;
     }
   ): Promise<ServiceResponse> {
     try {
@@ -259,6 +283,15 @@ export default class TransactionService {
           dateQuery.$lte = endDateObj;
         }
         query.date = dateQuery;
+      }
+
+      // Search filtering
+      if (filters?.search) {
+        const searchRegex = new RegExp(filters.search, "i");
+        query.$or = [
+          { note: searchRegex },
+          { type: searchRegex }
+        ];
       }
 
       const transactions = await TransactionModel.find(query)

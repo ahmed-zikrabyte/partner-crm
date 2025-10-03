@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -9,9 +10,11 @@ import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
+import { DataTable } from "@workspace/ui/components/data-table";
 import { AddTransactionDialog } from "@/components/global/add-transaction-dialog";
 import { IndianRupee, Download, Search } from "lucide-react";
 import { toast } from "sonner";
+import type { ColumnDef } from "@tanstack/react-table";
 
 interface Transaction {
   _id: string;
@@ -30,17 +33,23 @@ interface Transaction {
 export default function CashbookPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [internalTransactions, setInternalTransactions] = useState<Transaction[]>([]);
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
+  const [allInternalTransactions, setAllInternalTransactions] = useState<Transaction[]>([]);
   const [partner, setPartner] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // All transactions filters
+  // All transactions state
+  const [allCurrentPage, setAllCurrentPage] = useState(1);
+  const [allPagination, setAllPagination] = useState({ totalPages: 0, hasNext: false, hasPrev: false, totalCount: 0 });
   const [typeFilter, setTypeFilter] = useState<"all" | "sell" | "return">("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   
-  // Internal transactions filters
+  // Internal transactions state
+  const [internalCurrentPage, setInternalCurrentPage] = useState(1);
+  const [internalPagination, setInternalPagination] = useState({ totalPages: 0, hasNext: false, hasPrev: false, totalCount: 0 });
   const [internalSearch, setInternalSearch] = useState("");
   const [debouncedInternalSearch, setDebouncedInternalSearch] = useState("");
   const [internalStartDate, setInternalStartDate] = useState("");
@@ -49,90 +58,240 @@ export default function CashbookPage() {
   
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
 
-  // Debounce all transactions search
+  // Debounce searches
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
+      setAllCurrentPage(1);
     }, 200);
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Debounce internal transactions search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedInternalSearch(internalSearch);
+      setInternalCurrentPage(1);
     }, 200);
     return () => clearTimeout(timer);
   }, [internalSearch]);
 
-  // Fetch transactions when debounced search or dates change
+  // Fetch all data for stats
+  useEffect(() => {
+    fetchAllData();
+  }, [debouncedSearch, startDate, endDate, typeFilter, debouncedInternalSearch, internalStartDate, internalEndDate, internalTypeFilter]);
+
+  // Fetch paginated transactions
   useEffect(() => {
     fetchCashTransactions();
-  }, [debouncedSearch, startDate, endDate]);
+  }, [allCurrentPage]);
 
-  const fetchCashTransactions = async () => {
+  // Fetch paginated internal transactions
+  useEffect(() => {
+    fetchInternalTransactions();
+  }, [internalCurrentPage]);
+
+  // Fetch partner profile
+  useEffect(() => {
+    fetchPartnerProfile();
+  }, []);
+
+  const fetchPartnerProfile = async () => {
+    try {
+      const partnerResponse = await getPartnerProfile();
+      setPartner(partnerResponse.data);
+    } catch (error) {
+      console.error("Error fetching partner:", error);
+    }
+  };
+
+  const fetchAllData = async () => {
     setLoading(true);
     try {
-      const [transactionResponse, partnerResponse] = await Promise.all([
-        getAllTransactions({ search: debouncedSearch, startDate, endDate }),
-        getPartnerProfile()
-      ]);
+      // Fetch all cash transactions for stats
+      const allCashResponse = await getAllTransactions({ 
+        search: debouncedSearch, 
+        startDate, 
+        endDate, 
+        type: typeFilter === "all" ? undefined : typeFilter,
+        paymentMode: "cash",
+        limit: 0 // Get all data for stats
+      });
       
-      const allTransactions = transactionResponse.data;
+      // Fetch all internal transactions for stats
+      const allInternalResponse = await getAllTransactions({ 
+        search: debouncedInternalSearch, 
+        startDate: internalStartDate, 
+        endDate: internalEndDate, 
+        type: internalTypeFilter === "all" ? undefined : internalTypeFilter,
+        limit: 0 // Get all data for stats
+      });
       
-      const cashTransactions = allTransactions.filter(
-        (transaction: Transaction) => transaction.paymentMode === "cash"
-      );
-      
-      const internalTxns = allTransactions.filter(
+      const allInternalTxns = allInternalResponse.data.transactions.filter(
         (transaction: Transaction) => transaction.type === "credit" || transaction.type === "debit"
       );
       
-      setTransactions(cashTransactions);
-      setInternalTransactions(internalTxns);
-      setPartner(partnerResponse.data);
+      setAllTransactions(allCashResponse.data.transactions);
+      setAllInternalTransactions(allInternalTxns);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching all data:", error);
       toast.error("Failed to fetch transactions");
     } finally {
       setLoading(false);
     }
   };
 
-  // Memoized filtered transactions for "All Transactions" tab
-  const filteredTransactions = useMemo(() => {
-    let filtered = transactions;
-    
-    if (typeFilter !== "all") {
-      filtered = filtered.filter(t => t.type === typeFilter);
+  const fetchCashTransactions = async () => {
+    try {
+      const response = await getAllTransactions({ 
+        search: debouncedSearch, 
+        startDate, 
+        endDate, 
+        page: allCurrentPage,
+        type: typeFilter === "all" ? undefined : typeFilter,
+        paymentMode: "cash"
+      });
+      
+      setTransactions(response.data.transactions);
+      setAllPagination(response.data.pagination);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
     }
-    
-    return filtered;
-  }, [transactions, typeFilter]);
+  };
 
-  // Memoized filtered internal transactions
-  const filteredInternalTransactions = useMemo(() => {
-    return internalTransactions.filter(transaction => {
-      const matchesSearch = !debouncedInternalSearch || 
-                           transaction.note?.toLowerCase().includes(debouncedInternalSearch.toLowerCase()) ||
-                           transaction.author.authorId.name?.toLowerCase().includes(debouncedInternalSearch.toLowerCase());
+  const fetchInternalTransactions = async () => {
+    try {
+      // Fetch credit and debit transactions separately and combine
+      const [creditResponse, debitResponse] = await Promise.all([
+        getAllTransactions({ 
+          search: debouncedInternalSearch, 
+          startDate: internalStartDate, 
+          endDate: internalEndDate, 
+          type: "credit",
+          limit: 0
+        }),
+        getAllTransactions({ 
+          search: debouncedInternalSearch, 
+          startDate: internalStartDate, 
+          endDate: internalEndDate, 
+          type: "debit",
+          limit: 0
+        })
+      ]);
       
-      const matchesDateRange = (!internalStartDate || new Date(transaction.date) >= new Date(internalStartDate)) &&
-                              (!internalEndDate || new Date(transaction.date) <= new Date(internalEndDate));
+      // Combine and sort all internal transactions
+      const allInternal = [...creditResponse.data.transactions, ...debitResponse.data.transactions]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
-      const matchesType = internalTypeFilter === "all" || transaction.type === internalTypeFilter;
+      // Apply pagination manually
+      const startIndex = (internalCurrentPage - 1) * 10;
+      const endIndex = startIndex + 10;
+      const paginatedInternal = allInternal.slice(startIndex, endIndex);
       
-      return matchesSearch && matchesDateRange && matchesType;
-    });
-  }, [internalTransactions, debouncedInternalSearch, internalStartDate, internalEndDate, internalTypeFilter]);
+      setInternalTransactions(paginatedInternal);
+      
+      // Calculate pagination
+      const totalCount = allInternal.length;
+      const totalPages = Math.ceil(totalCount / 10);
+      const hasNext = internalCurrentPage < totalPages;
+      const hasPrev = internalCurrentPage > 1;
+      
+      setInternalPagination({
+        totalPages,
+        hasNext,
+        hasPrev,
+        totalCount
+      });
+    } catch (error) {
+      console.error("Error fetching internal transactions:", error);
+    }
+  };
 
-  // Memoized calculations for "All Transactions" tab
+  // Table columns for all transactions
+  const allTransactionColumns: ColumnDef<Transaction>[] = [
+    {
+      accessorKey: "date",
+      header: "Date",
+      cell: ({ row }) => new Date(row.original.date).toLocaleDateString(),
+    },
+    {
+      accessorKey: "type",
+      header: "Type",
+      cell: ({ row }) => (
+        <Badge variant={row.original.type === "sell" ? "default" : "destructive"}>
+          {row.original.type === "sell" ? "Sale" : "Return"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "vendorId",
+      header: "Vendor",
+      cell: ({ row }) => row.original.vendorId?.name || "N/A",
+    },
+    {
+      accessorKey: "amount",
+      header: "Amount",
+      cell: ({ row }) => (
+        <span className={row.original.type === "sell" ? "text-green-600" : "text-red-600"}>
+          {row.original.type === "sell" ? "+" : "-"}₹{row.original.amount.toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "author",
+      header: "Created By",
+      cell: ({ row }) => row.original.author.authorId.name,
+    },
+    {
+      accessorKey: "note",
+      header: "Note",
+      cell: ({ row }) => row.original.note || "N/A",
+    },
+  ];
+
+  // Table columns for internal transactions
+  const internalTransactionColumns: ColumnDef<Transaction>[] = [
+    {
+      accessorKey: "date",
+      header: "Date",
+      cell: ({ row }) => new Date(row.original.date).toLocaleDateString(),
+    },
+    {
+      accessorKey: "type",
+      header: "Type",
+      cell: ({ row }) => (
+        <Badge variant={row.original.type === "credit" ? "default" : "destructive"}>
+          {row.original.type === "credit" ? "Credit" : "Debit"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "amount",
+      header: "Amount",
+      cell: ({ row }) => (
+        <span className={row.original.type === "credit" ? "text-green-600" : "text-red-600"}>
+          {row.original.type === "credit" ? "+" : "-"}₹{row.original.amount.toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "author",
+      header: "Created By",
+      cell: ({ row }) => row.original.author.authorId.name,
+    },
+    {
+      accessorKey: "note",
+      header: "Note",
+      cell: ({ row }) => row.original.note || "N/A",
+    },
+  ];
+
+  // Stats calculations using all data
   const cashStats = useMemo(() => {
-    const totalIn = filteredTransactions
+    const totalIn = allTransactions
       .filter(t => t.type === "sell")
       .reduce((sum, t) => sum + t.amount, 0);
     
-    const totalOut = filteredTransactions
+    const totalOut = allTransactions
       .filter(t => t.type === "return")
       .reduce((sum, t) => sum + t.amount, 0);
     
@@ -141,15 +300,14 @@ export default function CashbookPage() {
       totalCashOut: totalOut,
       netCash: totalIn - totalOut
     };
-  }, [filteredTransactions]);
+  }, [allTransactions]);
 
-  // Memoized calculations for "Internal Transactions" tab
   const internalStats = useMemo(() => {
-    const totalCredit = filteredInternalTransactions
+    const totalCredit = allInternalTransactions
       .filter(t => t.type === "credit")
       .reduce((sum, t) => sum + t.amount, 0);
     
-    const totalDebit = filteredInternalTransactions
+    const totalDebit = allInternalTransactions
       .filter(t => t.type === "debit")
       .reduce((sum, t) => sum + t.amount, 0);
     
@@ -158,33 +316,26 @@ export default function CashbookPage() {
       totalDebit,
       netInternal: totalCredit - totalDebit
     };
-  }, [filteredInternalTransactions]);
+  }, [allInternalTransactions]);
 
   const handleExport = async (tabType: "all" | "internal") => {
     try {
       const filters: any = {};
-      if (startDate) filters.startDate = startDate;
-      if (endDate) filters.endDate = endDate;
-      
       if (tabType === "internal") {
-        const internalTypes = ["credit", "debit"];
-        const promises = internalTypes.map(type => 
-          exportTransactions({ ...filters, type: type as any })
-        );
-        const responses = await Promise.all(promises);
-        const combinedData = responses.flatMap(r => r.data);
-        
-        const csvContent = convertToCSV(combinedData);
-        downloadCSV(csvContent, "internal-transactions");
+        if (internalStartDate) filters.startDate = internalStartDate;
+        if (internalEndDate) filters.endDate = internalEndDate;
+        if (debouncedInternalSearch) filters.search = debouncedInternalSearch;
+        if (internalTypeFilter !== "all") filters.type = internalTypeFilter;
       } else {
-        const response = await exportTransactions(filters);
-        const cashData = response.data.filter((t: any) => 
-          t["Payment Mode"] === "cash" || t["Type"] === "CREDIT" || t["Type"] === "DEBIT"
-        );
-        
-        const csvContent = convertToCSV(cashData);
-        downloadCSV(csvContent, "cash-transactions");
+        if (startDate) filters.startDate = startDate;
+        if (endDate) filters.endDate = endDate;
+        if (debouncedSearch) filters.search = debouncedSearch;
+        if (typeFilter !== "all") filters.type = typeFilter;
       }
+      
+      const response = await exportTransactions(filters);
+      const csvContent = convertToCSV(response.data);
+      downloadCSV(csvContent, tabType === "internal" ? "internal-transactions" : "cash-transactions");
       
       toast.success("Transactions exported successfully");
     } catch (error) {
@@ -214,6 +365,7 @@ export default function CashbookPage() {
     setStartDate("");
     setEndDate("");
     setTypeFilter("all");
+    setAllCurrentPage(1);
   };
 
   const clearInternalFilters = () => {
@@ -221,6 +373,20 @@ export default function CashbookPage() {
     setInternalStartDate("");
     setInternalEndDate("");
     setInternalTypeFilter("all");
+    setInternalCurrentPage(1);
+  };
+
+  const handleAllPageChange = (page: number) => {
+    setAllCurrentPage(page);
+  };
+
+  const handleInternalPageChange = (page: number) => {
+    setInternalCurrentPage(page);
+  };
+
+  const refreshData = () => {
+    fetchCashTransactions();
+    fetchInternalTransactions();
   };
 
   if (loading) {
@@ -252,8 +418,8 @@ export default function CashbookPage() {
 
       <Tabs defaultValue="all" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="all">All Transactions ({transactions.length})</TabsTrigger>
-          <TabsTrigger value="internal">Internal Transactions ({internalTransactions.length})</TabsTrigger>
+          <TabsTrigger value="all">All Transactions ({allTransactions.length})</TabsTrigger>
+          <TabsTrigger value="internal">Internal Transactions ({allInternalTransactions.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="space-y-6">
@@ -339,40 +505,16 @@ export default function CashbookPage() {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Transaction History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {filteredTransactions.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No cash transactions found</p>
-              ) : (
-                <div className="space-y-4">
-                  {filteredTransactions.map((transaction) => (
-                    <div key={transaction._id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={transaction.type === "sell" ? "default" : "destructive"}>
-                            {transaction.type === "sell" ? "Sale" : "Return"}
-                          </Badge>
-                          <span className="font-medium">{transaction.vendorId?.name || 'N/A'}</span>
-                        </div>
-                        <div className={`text-lg font-bold ${transaction.type === "sell" ? 'text-green-600' : 'text-red-600'}`}>
-                          {transaction.type === "sell" ? "+" : "-"}₹{transaction.amount.toLocaleString()}
-                        </div>
-                      </div>
-                      
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <div>Date: {new Date(transaction.date).toLocaleDateString()}</div>
-                        <div>By: {transaction.author.authorId.name}</div>
-                        {transaction.note && <div>Note: {transaction.note}</div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <DataTable
+            data={transactions}
+            columns={allTransactionColumns}
+            pagination={{
+              currentPage: allCurrentPage,
+              ...allPagination,
+            }}
+            onPaginationChange={handleAllPageChange}
+            loading={loading}
+          />
         </TabsContent>
 
         <TabsContent value="internal" className="space-y-6">
@@ -462,39 +604,16 @@ export default function CashbookPage() {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Internal Transactions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {filteredInternalTransactions.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No internal transactions found</p>
-              ) : (
-                <div className="space-y-4">
-                  {filteredInternalTransactions.map((transaction) => (
-                    <div key={transaction._id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={transaction.type === "credit" ? "default" : "destructive"}>
-                            {transaction.type === "credit" ? "Credit" : "Debit"}
-                          </Badge>
-                        </div>
-                        <div className={`text-lg font-bold ${transaction.type === "credit" ? 'text-green-600' : 'text-red-600'}`}>
-                          {transaction.type === "credit" ? "+" : "-"}₹{transaction.amount.toLocaleString()}
-                        </div>
-                      </div>
-                      
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <div>Date: {new Date(transaction.date).toLocaleDateString()}</div>
-                        <div>By: {transaction.author.authorId.name}</div>
-                        {transaction.note && <div>Note: {transaction.note}</div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <DataTable
+            data={internalTransactions}
+            columns={internalTransactionColumns}
+            pagination={{
+              currentPage: internalCurrentPage,
+              ...internalPagination,
+            }}
+            onPaginationChange={handleInternalPageChange}
+            loading={loading}
+          />
         </TabsContent>
       </Tabs>
 
@@ -503,7 +622,7 @@ export default function CashbookPage() {
         onOpenChange={setTransactionDialogOpen}
         entityId=""
         entityType="partner"
-        onSuccess={fetchCashTransactions}
+        onSuccess={refreshData}
       />
     </div>
   );

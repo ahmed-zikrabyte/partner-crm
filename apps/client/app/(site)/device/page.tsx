@@ -379,6 +379,19 @@ export default function DevicePage() {
       },
     }] : []),
     {
+      accessorKey: "sellHistory",
+      header: "Return Count",
+      cell: ({ row }) => {
+        const sellHistory = row.original.sellHistory;
+        const returnCount = sellHistory?.filter((h: any) => h.type === 'return').length || 0;
+        return (
+          <span className={returnCount > 3 ? "text-red-600 font-bold" : "text-gray-900"}>
+            {returnCount}
+          </span>
+        );
+      },
+    },
+    {
       accessorKey: "actions",
       header: "Actions",
       cell: ({ row }) => (
@@ -513,6 +526,10 @@ export default function DevicePage() {
             }}
             onPaginationChange={handlePageChange}
             loading={loading}
+            getRowClassName={(device: DeviceData) => {
+              const returnCount = device.sellHistory?.filter((h: any) => h.type === 'return').length || 0;
+              return returnCount > 3 ? "bg-red-50 border-red-200" : "";
+            }}
           />
         </TabsContent>
       </Tabs>
