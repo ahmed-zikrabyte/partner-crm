@@ -250,6 +250,11 @@ export default class DeviceService {
         if (filter.companyIds) query.companyIds = filter.companyIds;
         if (filter.pickedBy) query.pickedBy = filter.pickedBy;
         
+        // Vendor filtering - filter devices that have transactions with specific vendor
+        if (filter.vendorId) {
+          query["sellHistory.vendor"] = new mongoose.Types.ObjectId(filter.vendorId);
+        }
+        
         // Date filtering
         if (filter.startDate || filter.endDate) {
           const dateQuery: any = {};
@@ -401,6 +406,7 @@ export default class DeviceService {
 
       if (filters?.companyIds) query.companyIds = filters.companyIds;
       if (filters?.pickedBy) query.pickedBy = filters.pickedBy;
+      if (filters?.vendorId) query["sellHistory.vendor"] = new mongoose.Types.ObjectId(filters.vendorId);
       
       // Date filtering
       if (filters?.startDate || filters?.endDate) {
@@ -575,6 +581,7 @@ export default class DeviceService {
 
       if (filters?.companyIds) query.companyIds = filters.companyIds;
       if (filters?.pickedBy) query.pickedBy = filters.pickedBy;
+      if (filters?.vendorId) query["sellHistory.vendor"] = new mongoose.Types.ObjectId(filters.vendorId);
       
       // Date filtering
       if (filters?.startDate || filters?.endDate) {
@@ -674,5 +681,95 @@ export default class DeviceService {
     }
   }
 
+  async exportEmployeeDevices(
+    partnerId: string,
+    pickedBy: string,
+    filters?: any
+  ): Promise<ServiceResponse> {
+    try {
+      const query: Record<string, any> = {
+        isDeleted: false,
+        partnerId,
+        pickedBy,
+      };
+      
+      // Date filtering
+      if (filters?.startDate || filters?.endDate) {
+        const dateQuery: any = {};
+        if (filters.startDate) {
+          dateQuery.$gte = new Date(filters.startDate);
+        }
+        if (filters.endDate) {
+          const endDate = new Date(filters.endDate);
+          endDate.setHours(23, 59, 59, 999);
+          dateQuery.$lte = endDate;
+        }
+        query.date = dateQuery;
+      }
+
+      const devices = await this.deviceModel
+        .find(query)
+        .populate("companyIds", "name")
+        .populate("pickedBy", "name")
+        .populate("sellHistory.vendor", "name")
+        .sort({ createdAt: -1 });
+
+      const formatDate = (dateStr: string | Date) => {
+        if (!dateStr) return "N/A";
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "N/A";
+        return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
+      };
+
+      const exportData = devices.map((device) => {
+        const latestTransaction = device.sellHistory && device.sellHistory.length > 0 
+          ? device.sellHistory[device.sellHistory.length - 1] 
+          : null;
+        
+        const status = latestTransaction ? latestTransaction.type : "New";
+        
+        return {
+          "Device ID": device.deviceId,
+          "Company": (device.companyIds as any)?.name || "N/A",
+          "Company ID": device.selectedCompanyIds || "N/A",
+          "Service Number": device.serviceNumber || "N/A",
+          Brand: device.brand,
+          Model: device.model,
+          Box: device.box || "N/A",
+          Warranty: device.warranty || "N/A",
+          Issues: device.issues || "N/A",
+          "IMEI 1": device.imei1,
+          "IMEI 2": device.imei2 || "N/A",
+          "Initial Cost": device.initialCost || 0,
+          "Purchased Cost": device.cost || 0,
+          "Extra Amount": device.extraAmount || 0,
+          Credits: device.credit || 0,
+          "Per Credit Value": device.perCredit || 0,
+          Commission: device.commission || 0,
+          GST: device.gst || 0,
+          "Total Cost": device.totalCost || 0,
+          "Latest Vendor": latestTransaction?.vendor
+            ? (latestTransaction.vendor as any)?.name
+            : "N/A",
+          "Latest Amount": latestTransaction?.type === "sell" 
+            ? latestTransaction.selling || 0
+            : latestTransaction?.returnAmount || 0,
+          "Status": status,
+          "Current Profit/Loss": device.profit || 0,
+          "Picked By": (device.pickedBy as any)?.name || "N/A",
+          "Picked Date": formatDate(device.date),
+        };
+      });
+
+      return {
+        data: exportData,
+        message: "Employee devices exported successfully",
+        status: HTTP.OK,
+        success: true,
+      };
+    } catch (error) {
+      throw new AppError((error as Error).message, HTTP.INTERNAL_SERVER_ERROR);
+    }
+  }
 
 }

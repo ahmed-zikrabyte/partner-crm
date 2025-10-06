@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { EditIcon, Eye, Trash } from "lucide-react";
@@ -28,48 +28,90 @@ import { toast } from "sonner";
 export default function VendorPage() {
   const router = useRouter();
   const [vendors, setVendors] = useState<VendorData[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  // Separate state for better control
+  const [currentPage, setCurrentPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  
   const [pagination, setPagination] = useState({
-    currentPage: 1,
     totalPages: 0,
     hasNext: false,
     hasPrev: false,
   });
-  const [search, setSearch] = useState("");
 
   const [selectedVendor, setSelectedVendor] = useState<VendorData | null>(null);
-  const [modalMode, setModalMode] = useState<"create" | "edit" | "view" | null>(
-    null
-  );
+  const [modalMode, setModalMode] = useState<"create" | "edit" | "view" | null>(null);
   const [openModal, setOpenModal] = useState(false);
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [openToggleModal, setOpenToggleModal] = useState(false);
 
-  // Fetch vendors
-  const fetchVendors = useCallback(async () => {
-    try {
-      const response = await getAllVendors({
-        page: pagination.currentPage,
-        search,
-      });
-      setVendors(response.data.vendors);
-      setPagination(response.data.pagination);
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.response?.data?.message || "Failed to fetch vendors");
-    }
-  }, [pagination.currentPage, search]);
-
+  // Debounce search to avoid excessive API calls
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1); // Reset to page 1 on search
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Fetch vendors - simplified dependencies
+  useEffect(() => {
+    const fetchVendors = async () => {
+      setLoading(true);
+      try {
+        const response = await getAllVendors({
+          page: currentPage,
+          search: debouncedSearch,
+        });
+        
+        setVendors(response.data.vendors);
+        setPagination({
+          totalPages: response.data.pagination.totalPages,
+          hasNext: response.data.pagination.hasNext,
+          hasPrev: response.data.pagination.hasPrev,
+        });
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err?.response?.data?.message || "Failed to fetch vendors");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchVendors();
-  }, [fetchVendors]);
+  }, [currentPage, debouncedSearch]);
 
   const handlePageChange = (page: number) => {
-    setPagination((prev) => ({ ...prev, currentPage: page }));
+    setCurrentPage(page);
   };
 
   const handleSearch = (value: string) => {
     setSearch(value);
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+  };
+
+  const refreshData = async () => {
+    setLoading(true);
+    try {
+      const response = await getAllVendors({
+        page: currentPage,
+        search: debouncedSearch,
+      });
+      
+      setVendors(response.data.vendors);
+      setPagination({
+        totalPages: response.data.pagination.totalPages,
+        hasNext: response.data.pagination.hasNext,
+        hasPrev: response.data.pagination.hasPrev,
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.response?.data?.message || "Failed to fetch vendors");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleToggleSwitch = async () => {
@@ -79,7 +121,7 @@ export default function VendorPage() {
       toast.success(
         `Vendor ${selectedVendor.isActive ? "deactivated" : "activated"} successfully`
       );
-      fetchVendors();
+      await refreshData();
       setOpenToggleModal(false);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to toggle status");
@@ -91,7 +133,7 @@ export default function VendorPage() {
     try {
       await deleteVendor(selectedVendor._id);
       toast.success("Vendor deleted successfully");
-      fetchVendors();
+      await refreshData();
       setOpenDeleteModal(false);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to delete vendor");
@@ -105,7 +147,7 @@ export default function VendorPage() {
   };
 
   const handleFormSuccess = () => {
-    fetchVendors();
+    refreshData();
     handleCloseModal();
   };
 
@@ -126,7 +168,7 @@ export default function VendorPage() {
     {
       accessorKey: "_id",
       header: "Sl.No",
-      cell: ({ row }) => (pagination.currentPage - 1) * 10 + row.index + 1,
+      cell: ({ row }) => (currentPage - 1) * 10 + row.index + 1,
     },
     {
       accessorKey: "name",
@@ -218,8 +260,12 @@ export default function VendorPage() {
       <DataTable
         data={vendors}
         columns={columns}
-        pagination={pagination}
+        pagination={{
+          currentPage,
+          ...pagination,
+        }}
         onPaginationChange={handlePageChange}
+        loading={loading}
       />
 
       {/* Vendor Modal */}

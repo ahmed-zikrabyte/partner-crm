@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { EditIcon, Eye, Trash } from "lucide-react";
+import { EditIcon, Eye, Trash, Smartphone } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Switch } from "@workspace/ui/components/switch";
@@ -25,14 +26,20 @@ import type { EmployeeData } from "@/components/employee/employee.schema";
 import { toast } from "sonner";
 
 export default function EmployeePage() {
+  const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Separate state for better control
+  const [currentPage, setCurrentPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
   const [pagination, setPagination] = useState({
-    currentPage: 1,
     totalPages: 0,
     hasNext: false,
     hasPrev: false,
   });
-  const [search, setSearch] = useState("");
 
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeData | null>(
     null
@@ -44,32 +51,73 @@ export default function EmployeePage() {
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [openToggleModal, setOpenToggleModal] = useState(false);
 
-  // Fetch employees
-  const fetchEmployees = useCallback(async () => {
-    try {
-      const response = await getAllEmployees({
-        page: pagination.currentPage,
-        search,
-      });
-      setEmployees(response.data.employees);
-      setPagination(response.data.pagination);
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.response?.data?.message || "Failed to fetch employees");
-    }
-  }, [pagination.currentPage, search]);
-
+  // Debounce search to avoid excessive API calls
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1); // Reset to page 1 on search
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Fetch employees - simplified dependencies
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      setLoading(true);
+      try {
+        const response = await getAllEmployees({
+          page: currentPage,
+          search: debouncedSearch,
+        });
+
+        setEmployees(response.data.employees);
+        setPagination({
+          totalPages: response.data.pagination.totalPages,
+          hasNext: response.data.pagination.hasNext,
+          hasPrev: response.data.pagination.hasPrev,
+        });
+      } catch (err: any) {
+        console.error(err);
+        toast.error(
+          err?.response?.data?.message || "Failed to fetch employees"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchEmployees();
-  }, [fetchEmployees]);
+  }, [currentPage, debouncedSearch]);
 
   const handlePageChange = (page: number) => {
-    setPagination((prev) => ({ ...prev, currentPage: page }));
+    setCurrentPage(page);
   };
 
   const handleSearch = (value: string) => {
     setSearch(value);
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+  };
+
+  const refreshData = async () => {
+    setLoading(true);
+    try {
+      const response = await getAllEmployees({
+        page: currentPage,
+        search: debouncedSearch,
+      });
+
+      setEmployees(response.data.employees);
+      setPagination({
+        totalPages: response.data.pagination.totalPages,
+        hasNext: response.data.pagination.hasNext,
+        hasPrev: response.data.pagination.hasPrev,
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.response?.data?.message || "Failed to fetch employees");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleToggleSwitch = async () => {
@@ -79,7 +127,7 @@ export default function EmployeePage() {
       toast.success(
         `Employee ${selectedEmployee.isActive ? "deactivated" : "activated"} successfully`
       );
-      fetchEmployees();
+      await refreshData();
       setOpenToggleModal(false);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to toggle status");
@@ -91,7 +139,7 @@ export default function EmployeePage() {
     try {
       await deleteEmployee(selectedEmployee._id);
       toast.success("Employee deleted successfully");
-      fetchEmployees();
+      await refreshData();
       setOpenDeleteModal(false);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to delete employee");
@@ -105,7 +153,7 @@ export default function EmployeePage() {
   };
 
   const handleFormSuccess = () => {
-    fetchEmployees();
+    refreshData();
     handleCloseModal();
   };
 
@@ -126,7 +174,7 @@ export default function EmployeePage() {
     {
       accessorKey: "_id",
       header: "Sl.No",
-      cell: ({ row }) => (pagination.currentPage - 1) * 10 + row.index + 1,
+      cell: ({ row }) => (currentPage - 1) * 10 + row.index + 1,
     },
     {
       accessorKey: "name",
@@ -166,11 +214,8 @@ export default function EmployeePage() {
           <Button
             size="icon"
             variant="outline"
-            onClick={() => {
-              setSelectedEmployee(row.original);
-              setModalMode("view");
-              setOpenModal(true);
-            }}
+            onClick={() => router.push(`/employee/${row.original._id}/devices`)}
+            title="View Devices"
           >
             <Eye className="w-4 h-4" />
           </Button>
@@ -228,8 +273,12 @@ export default function EmployeePage() {
       <DataTable
         data={employees}
         columns={columns}
-        pagination={pagination}
+        pagination={{
+          currentPage,
+          ...pagination,
+        }}
         onPaginationChange={handlePageChange}
+        loading={loading}
       />
 
       {/* Employee Modal */}

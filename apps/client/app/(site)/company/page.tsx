@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { EditIcon, Eye, Trash } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
@@ -26,34 +26,80 @@ import { toast } from "sonner";
 
 export default function CompanyPage() {
   const [companies, setCompanies] = useState<CompanyData[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  // Separate state for better control
+  const [currentPage, setCurrentPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  
   const [pagination, setPagination] = useState({
-    currentPage: 1,
     totalPages: 0,
     hasNext: false,
     hasPrev: false,
   });
-  const [search, setSearch] = useState("");
 
-  const [selectedCompany, setSelectedCompany] = useState<CompanyData | null>(
-    null
-  );
-  const [modalMode, setModalMode] = useState<"create" | "edit" | "view" | null>(
-    null
-  );
+  const [selectedCompany, setSelectedCompany] = useState<CompanyData | null>(null);
+  const [modalMode, setModalMode] = useState<"create" | "edit" | "view" | null>(null);
   const [openModal, setOpenModal] = useState(false);
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [openToggleModal, setOpenToggleModal] = useState(false);
 
-  // Fetch companies
-  const fetchCompanies = useCallback(async () => {
+  // Debounce search to avoid excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1); // Reset to page 1 on search
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Fetch companies - simplified dependencies
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      setLoading(true);
+      try {
+        const response = await getAllCompanies({
+          page: currentPage,
+          search: debouncedSearch,
+        });
+        
+        setCompanies(response.data.companies);
+        setPagination({
+          totalPages: response.data.pagination.totalPages,
+          hasNext: response.data.pagination.hasNext,
+          hasPrev: response.data.pagination.hasPrev,
+        });
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err?.response?.data?.message || "Failed to fetch companies");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCompanies();
+  }, [currentPage, debouncedSearch]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleSearch = (value: string) => {
+    setSearch(value);
+  };
+
+  const refreshData = async () => {
+    setLoading(true);
     try {
       const response = await getAllCompanies({
-        page: pagination.currentPage,
-        search,
+        page: currentPage,
+        search: debouncedSearch,
       });
+      
       setCompanies(response.data.companies);
       setPagination({
-        currentPage: response.data.pagination.currentPage,
         totalPages: response.data.pagination.totalPages,
         hasNext: response.data.pagination.hasNext,
         hasPrev: response.data.pagination.hasPrev,
@@ -61,20 +107,9 @@ export default function CompanyPage() {
     } catch (err: any) {
       console.error(err);
       toast.error(err?.response?.data?.message || "Failed to fetch companies");
+    } finally {
+      setLoading(false);
     }
-  }, [pagination.currentPage, search]);
-
-  useEffect(() => {
-    fetchCompanies();
-  }, [fetchCompanies]);
-
-  const handlePageChange = (page: number) => {
-    setPagination((prev) => ({ ...prev, currentPage: page }));
-  };
-
-  const handleSearch = (value: string) => {
-    setSearch(value);
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
   };
 
   const handleToggleSwitch = async () => {
@@ -84,7 +119,7 @@ export default function CompanyPage() {
       toast.success(
         `Company ${selectedCompany.isActive ? "deactivated" : "activated"} successfully`
       );
-      fetchCompanies();
+      await refreshData();
       setOpenToggleModal(false);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to toggle status");
@@ -96,27 +131,24 @@ export default function CompanyPage() {
     try {
       await deleteCompany(selectedCompany._id);
       toast.success("Company deleted successfully");
-      fetchCompanies();
+      await refreshData();
       setOpenDeleteModal(false);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to delete company");
     }
   };
 
-  // Close modal and reset state
   const handleCloseModal = () => {
     setOpenModal(false);
     setSelectedCompany(null);
     setModalMode(null);
   };
 
-  // Handle successful form submission
   const handleFormSuccess = () => {
-    fetchCompanies();
+    refreshData();
     handleCloseModal();
   };
 
-  // Get modal title based on mode
   const getModalTitle = () => {
     switch (modalMode) {
       case "create":
@@ -134,7 +166,7 @@ export default function CompanyPage() {
     {
       accessorKey: "_id",
       header: "Sl.No",
-      cell: ({ row }) => (pagination.currentPage - 1) * 10 + row.index + 1,
+      cell: ({ row }) => (currentPage - 1) * 10 + row.index + 1,
     },
     {
       accessorKey: "name",
@@ -178,7 +210,6 @@ export default function CompanyPage() {
             size="icon"
             variant="outline"
             onClick={() => {
-              console.log("Edit button clicked for company:", row.original);
               setSelectedCompany(row.original);
               setModalMode("edit");
               setOpenModal(true);
@@ -229,11 +260,14 @@ export default function CompanyPage() {
       <DataTable
         data={companies}
         columns={columns}
-        pagination={pagination}
+        pagination={{
+          currentPage,
+          ...pagination,
+        }}
         onPaginationChange={handlePageChange}
+        loading={loading}
       />
 
-      {/* Company Modal for Create/Edit/View */}
       <Dialog open={openModal} onOpenChange={handleCloseModal}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -251,7 +285,6 @@ export default function CompanyPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Toggle Modal */}
       {openToggleModal && selectedCompany && (
         <ConfirmationModal
           open={openToggleModal}
@@ -264,7 +297,6 @@ export default function CompanyPage() {
         />
       )}
 
-      {/* Delete Modal */}
       {openDeleteModal && selectedCompany && (
         <ConfirmationModal
           open={openDeleteModal}

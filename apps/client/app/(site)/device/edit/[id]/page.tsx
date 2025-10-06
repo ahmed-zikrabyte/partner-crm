@@ -1,8 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@workspace/ui/components/button";
 import DeviceForm from "@/components/device/device.form";
 import { getDeviceById } from "@/services/deviceService";
 import type { DeviceData } from "@/components/device/device.schema";

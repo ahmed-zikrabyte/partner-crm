@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   IndianRupee,
   Download,
-  Share2,
   QrCode,
   Printer,
 } from "lucide-react";
@@ -108,52 +107,58 @@ export default function DeviceDetailsPage() {
     if (ctx) {
       const selectedCompanyIds = device.selectedCompanyIds || "N/A";
       const model = device.model || "N/A";
-      const padding = 4;
-      const borderRadius = 8;
-      const containerPadding = 10;
-      
-      downloadCanvas.width = canvas.width + (containerPadding * 2);
-      downloadCanvas.height = canvas.height + 40 + (containerPadding * 2);
 
-      // Fill outer background
+      // Set exact dimensions for 1" x 1.5" at 300 DPI
+      const DPI = 300;
+      downloadCanvas.width = DPI; // 1 inch = 300px at 300 DPI
+      downloadCanvas.height = DPI * 1.5; // 1.5 inches = 450px at 300 DPI
+
+      // Fill white background
       ctx.fillStyle = "white";
       ctx.fillRect(0, 0, downloadCanvas.width, downloadCanvas.height);
 
-      // Draw container without border
-      const containerX = containerPadding;
-      const containerY = containerPadding;
-      const containerWidth = downloadCanvas.width - (containerPadding * 2);
-      const containerHeight = downloadCanvas.height - (containerPadding * 2);
-      
-      // Container background only
-      ctx.fillStyle = "white";
-      ctx.fillRect(containerX, containerY, containerWidth, containerHeight);
+      // Scale everything proportionally
+      const padding = 20;
+      const fontSize = 30; // Larger for 300 DPI
+      const lineHeight = 35;
 
-      // Add selectedCompanyIds at top
+      // Company ID at top
       ctx.fillStyle = "black";
-      ctx.font = "bold 12px Arial";
+      ctx.font = `bold ${fontSize}px Arial`;
       ctx.textAlign = "center";
-      ctx.fillText(selectedCompanyIds, downloadCanvas.width / 2, containerY + 15);
+      ctx.fillText(
+        selectedCompanyIds,
+        downloadCanvas.width / 2,
+        padding + fontSize
+      );
 
-      // Add QR code (centered)
-      const qrX = (downloadCanvas.width - canvas.width) / 2;
-      ctx.drawImage(canvas, qrX, containerY + 20);
+      // Calculate QR size to fit properly
+      const availableHeight =
+        downloadCanvas.height - padding * 2 - fontSize - 80;
+      const qrSize = Math.min(
+        downloadCanvas.width - padding * 2,
+        availableHeight
+      );
+      const qrX = (downloadCanvas.width - qrSize) / 2;
+      const qrY = padding + fontSize + 15;
 
-      // Add model at bottom (with text wrapping)
-      ctx.font = "bold 12px Arial";
-      const maxWidth = 100;
-      const words = model.split(' ');
-      let line = '';
-      let y = containerY + canvas.height + 35;
-      
+      // Draw QR code
+      ctx.drawImage(canvas, qrX, qrY, qrSize, qrSize);
+
+      // Model text at bottom
+      ctx.font = `bold ${fontSize}px Arial`;
+      const maxWidth = downloadCanvas.width - padding * 2;
+      const words = model.split(" ");
+      let line = "";
+      let y = qrY + qrSize + 40;
+
       for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
+        const testLine = line + words[n] + " ";
         const metrics = ctx.measureText(testLine);
-        const testWidth = metrics.width;
-        if (testWidth > maxWidth && n > 0) {
+        if (metrics.width > maxWidth && n > 0) {
           ctx.fillText(line, downloadCanvas.width / 2, y);
-          line = words[n] + ' ';
-          y += 12;
+          line = words[n] + " ";
+          y += lineHeight;
         } else {
           line = testLine;
         }
@@ -177,43 +182,53 @@ export default function DeviceDetailsPage() {
   };
 
   const printQRCode = () => {
+    const downloadCanvas = createQRCanvas();
+    if (!downloadCanvas) return;
+
     const printWindow = window.open("", "_blank");
     if (printWindow) {
+      const imageData = downloadCanvas.toDataURL("image/png");
+
       printWindow.document.write(`
-        <html>
-          <head>
-            <title>QR Code - ${device.selectedCompanyIds || "Device"}</title>
-            <style>
-              @page { size: A4; margin: 0.5in; }
-              body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
-              .qr-container { background: white; padding: 4px; border-radius: 8px; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); border: 2px solid #f3f4f6; text-align: center; max-width: 120px; }
-              .company-text { font-weight: 600; font-size: 12px; margin-bottom: 4px; }
-              .model-text { font-weight: 600; font-size: 12px; margin-top: 4px; word-break: break-words; max-width: 100px; margin-left: auto; margin-right: auto; line-height: 1.2; }
-              .qr-wrapper { display: flex; justify-content: center; }
-            </style>
-          </head>
-          <body>
-            <div class="qr-container">
-              <h3 class="company-text">${device.selectedCompanyIds || "N/A"}</h3>
-              <div class="qr-wrapper">
-                <canvas id="qr-canvas"></canvas>
-              </div>
-              <p class="model-text">${device.model || "N/A"}</p>
-            </div>
-            <script>
-              const canvas = document.getElementById('qr-canvas');
-              const originalCanvas = window.opener.document.querySelector('canvas');
-              if (originalCanvas && canvas) {
-                canvas.width = originalCanvas.width;
-                canvas.height = originalCanvas.height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(originalCanvas, 0, 0);
-              }
-              setTimeout(() => window.print(), 100);
-            </script>
-          </body>
-        </html>
-      `);
+      <html>
+        <head>
+          <title>QR Code - ${device.selectedCompanyIds || "Device"}</title>
+          <style>
+            @page { 
+              size: 1in 1.5in;
+              margin: 0;
+            }
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body { 
+              width: 1in;
+              height: 1.5in;
+              margin: 0;
+              padding: 0;
+              background: white;
+            }
+            img {
+              width: 1in;
+              height: 1.5in;
+              display: block;
+              object-fit: contain;
+            }
+          </style>
+        </head>
+        <body>
+          <img src="${imageData}" alt="QR Code" />
+          <script>
+            setTimeout(() => {
+              window.print();
+              window.onafterprint = () => window.close();
+            }, 250);
+          </script>
+        </body>
+      </html>
+    `);
       printWindow.document.close();
     }
   };
@@ -254,7 +269,10 @@ export default function DeviceDetailsPage() {
                     <DialogTitle>Device QR Code</DialogTitle>
                   </DialogHeader>
                   <div className="flex flex-col items-center space-y-4 p-4">
-                    <div id="qr-print-section" className="bg-white p-1 rounded-lg shadow-inner border-2 border-gray-100">
+                    <div
+                      id="qr-print-section"
+                      className="bg-white p-1 rounded-lg shadow-inner border-2 border-gray-100"
+                    >
                       <h3 className="text-center font-semibold text-xs">
                         {device.selectedCompanyIds || "N/A"}
                       </h3>
@@ -618,22 +636,31 @@ export default function DeviceDetailsPage() {
                       </div>
                     );
                   })()}
-                  {device.profit !== undefined && (
-                    <div
-                      className={`p-3 rounded-lg ${device.profit >= 0 ? "bg-green-50 border-2 border-green-200" : "bg-red-50 border-2 border-red-200"}`}
-                    >
-                      <label
-                        className={`text-xs font-medium uppercase tracking-wide ${device.profit >= 0 ? "text-green-600" : "text-red-600"}`}
-                      >
-                        Profit/Loss
-                      </label>
-                      <p
-                        className={`text-xl font-bold mt-1 ${device.profit >= 0 ? "text-green-900" : "text-red-900"}`}
-                      >
-                        ₹{device.profit}
-                      </p>
-                    </div>
-                  )}
+                  {(() => {
+                    // Calculate profit using backend logic: (total sells - total returns) - total cost
+                    let effectiveSelling = 0;
+                    if (device.sellHistory && device.sellHistory.length > 0) {
+                      for (const h of device.sellHistory) {
+                        if (h.type === "sell" && (h.selling || h.amount)) {
+                          effectiveSelling += h.selling || h.amount || 0;
+                        } else if (h.type === "return" && (h.returnAmount || h.amount)) {
+                          effectiveSelling -= h.returnAmount || h.amount || 0;
+                        }
+                      }
+                    }
+                    const calculatedProfit = effectiveSelling - device.totalCost;
+                    
+                    return (
+                      <div className={`p-3 rounded-lg ${calculatedProfit >= 0 ? "bg-green-50 border-2 border-green-200" : "bg-red-50 border-2 border-red-200"}`}>
+                        <label className={`text-xs font-medium uppercase tracking-wide ${calculatedProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          Profit/Loss
+                        </label>
+                        <p className={`text-xl font-bold mt-1 ${calculatedProfit >= 0 ? "text-green-900" : "text-red-900"}`}>
+                          ₹{calculatedProfit}
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>
@@ -647,65 +674,104 @@ export default function DeviceDetailsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {device.sellHistory.map((transaction, index) => (
-                      <div
-                        key={index}
-                        className={`p-4 rounded-lg border-l-4 ${
-                          transaction.type === "sell"
-                            ? "bg-green-50 border-green-400"
-                            : "bg-red-50 border-red-400"
-                        }`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge
-                                variant={
-                                  transaction.type === "sell"
-                                    ? "default"
-                                    : "destructive"
-                                }
-                              >
+                    {device.sellHistory.map((transaction, index) => {
+                      const transactionAmount = transaction.selling || transaction.returnAmount || transaction.amount || 0;
+                      
+                      let financialDetail = null;
+                      let financialLabel = "";
+                      
+                      if (transaction.type === "sell") {
+                        // For sells: calculate cumulative profit up to this point
+                        let cumulativeSelling = 0;
+                        for (let i = 0; i <= index; i++) {
+                          const h = device.sellHistory?.[i];
+                          if (h && h.type === "sell" && (h.selling || h.amount)) {
+                            cumulativeSelling += h.selling || h.amount || 0;
+                          } else if (h && h.type === "return" && (h.returnAmount || h.amount)) {
+                            cumulativeSelling -= h.returnAmount || h.amount || 0;
+                          }
+                        }
+                        financialDetail = cumulativeSelling - device.totalCost;
+                        financialLabel = "Profit/Loss";
+                      } else if (transaction.type === "return") {
+                        // For returns: show previous sell amount - return amount
+                        const previousSells = device.sellHistory?.slice(0, index).filter(t => t.type === "sell") || [];
+                        if (previousSells.length > 0) {
+                          const lastSell = previousSells[previousSells.length - 1];
+                          if (lastSell) {
+                            const lastSellAmount = lastSell.selling || lastSell.amount || 0;
+                            financialDetail = lastSellAmount - transactionAmount;
+                            financialLabel = "Surplus";
+                          }
+                        }
+                      }
+                      
+                      return (
+                        <div
+                          key={index}
+                          className={`p-4 rounded-lg border-l-4 ${
+                            transaction.type === "sell"
+                              ? "bg-green-50 border-green-400"
+                              : "bg-red-50 border-red-400"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge
+                                  variant={
+                                    transaction.type === "sell"
+                                      ? "default"
+                                      : "destructive"
+                                  }
+                                >
+                                  {transaction.type === "sell"
+                                    ? "SOLD"
+                                    : "RETURNED"}
+                                </Badge>
+                                <span className="text-sm text-gray-500">
+                                  {new Date(
+                                    transaction.createdAt
+                                  ).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <p className="font-medium text-gray-900">
                                 {transaction.type === "sell"
-                                  ? "SOLD"
-                                  : "RETURNED"}
-                              </Badge>
-                              <span className="text-sm text-gray-500">
-                                {new Date(
-                                  transaction.createdAt
-                                ).toLocaleDateString()}
-                              </span>
+                                  ? "Sold to"
+                                  : "Returned from"}
+                                :{" "}
+                                {getVendorName(
+                                  typeof transaction.vendor === "object"
+                                    ? transaction.vendor._id
+                                    : transaction.vendor
+                                )}
+                              </p>
                             </div>
-                            <p className="font-medium text-gray-900">
-                              {transaction.type === "sell"
-                                ? "Sold to"
-                                : "Returned from"}
-                              :{" "}
-                              {getVendorName(
-                                typeof transaction.vendor === "object"
-                                  ? transaction.vendor._id
-                                  : transaction.vendor
+                            <div className="text-right space-y-1">
+                              <p
+                                className={`text-lg font-bold ${
+                                  transaction.type === "sell"
+                                    ? "text-green-600"
+                                    : "text-red-600"
+                                }`}
+                              >
+                                ₹{transactionAmount}
+                              </p>
+                              {financialDetail !== null && (
+                                <div className={`text-sm font-medium px-2 py-1 rounded ${
+                                  financialDetail >= 0 
+                                    ? "bg-green-100 text-green-700" 
+                                    : "bg-red-100 text-red-700"
+                                }`}>
+                                  {financialLabel}: {financialDetail >= 0 ? "+" : ""}₹{financialDetail}
+                                  {transaction.type === "return" && financialDetail < 0 && " (Surplus)"}
+                                </div>
                               )}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p
-                              className={`text-lg font-bold ${
-                                transaction.type === "sell"
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }`}
-                            >
-                              ₹
-                              {transaction.selling ||
-                                transaction.returnAmount ||
-                                transaction.amount ||
-                                0}
-                            </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -741,6 +807,10 @@ export default function DeviceDetailsPage() {
               : lastEntry.vendor || "";
           })()}
           entityType="vendor"
+          deviceContext={{
+            deviceId: device._id,
+            sellHistory: device.sellHistory
+          }}
           onSuccess={() => {
             toast.success("Transaction recorded for vendor");
           }}

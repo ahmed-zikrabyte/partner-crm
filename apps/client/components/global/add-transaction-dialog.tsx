@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import { useState, useEffect } from "react";
 import { Button } from "@workspace/ui/components/button";
@@ -25,7 +26,7 @@ interface TransactionForm {
   paymentMode: "upi" | "card" | "cash";
   amount: string;
   note: string;
-  type: "return" | "sell" | "credit" | "debit";
+  type: "return" | "sell" | "credit" | "debit" | "investment";
   deviceId?: string;
 }
 
@@ -35,6 +36,12 @@ interface AddTransactionDialogProps {
   entityId: string;
   entityType: "vendor" | "device" | "partner"; // partner added for internal
   onSuccess?: () => void;
+  deviceContext?: {
+    deviceId: string;
+    sellHistory?: any[];
+  };
+  mode?: "add" | "edit";
+  isNewDevice?: boolean;
 }
 
 export function AddTransactionDialog({
@@ -43,6 +50,9 @@ export function AddTransactionDialog({
   entityId,
   entityType,
   onSuccess,
+  deviceContext,
+  mode = "add",
+  isNewDevice = false,
 }: AddTransactionDialogProps) {
   const [form, setForm] = useState<TransactionForm>({
     paymentMode: "cash",
@@ -55,22 +65,37 @@ export function AddTransactionDialog({
   const [devices, setDevices] = useState<any[]>([]);
   const [deviceSearch, setDeviceSearch] = useState("");
 
+  const getInitialTransactionType = () => {
+    if (entityType === "partner") return "credit";
+    if (isNewDevice || !deviceContext) return "sell";
+    
+    const { sellHistory } = deviceContext;
+    if (!sellHistory || sellHistory.length === 0) return "sell";
+    
+    const latestHistory = sellHistory[sellHistory.length - 1];
+    return latestHistory.type === "sell" ? "return" : "sell";
+  };
+
   const resetForm = () => {
     setForm({
       paymentMode: "cash",
       amount: "",
       note: "",
-      type: entityType === "partner" ? "credit" : "sell",
-      deviceId: "",
+      type: getInitialTransactionType(),
+      deviceId: deviceContext?.deviceId || "",
     });
     setDeviceSearch("");
   };
 
   useEffect(() => {
-    if (entityType === "partner") {
-      setForm(prev => ({ ...prev, type: "credit" }));
+    if (open) {
+      setForm(prev => ({ 
+        ...prev, 
+        type: getInitialTransactionType(),
+        deviceId: deviceContext?.deviceId || ""
+      }));
     }
-  }, [entityType]);
+  }, [open, entityType, deviceContext]);
 
   useEffect(() => {
     const fetchDevices = async () => {
@@ -91,7 +116,7 @@ export function AddTransactionDialog({
         return;
       }
 
-      if ((form.type === "sell" || form.type === "return") && !form.paymentMode) {
+      if ((form.type === "sell" || form.type === "return" || form.type === "investment") && !form.paymentMode) {
         toast.error("Please select payment mode");
         return;
       }
@@ -120,7 +145,7 @@ export function AddTransactionDialog({
         date: new Date().toISOString(),
       };
 
-      if (form.type === "sell" || form.type === "return") {
+      if (form.type === "sell" || form.type === "return" || form.type === "investment") {
         payload.paymentMode = form.paymentMode;
         payload.vendorId = entityType === "vendor" ? entityId : undefined;
       }
@@ -164,6 +189,7 @@ export function AddTransactionDialog({
               onValueChange={(value: TransactionForm["type"]) =>
                 setForm((prev) => ({ ...prev, type: value }))
               }
+              disabled={isNewDevice || (deviceContext && (!deviceContext.sellHistory || deviceContext.sellHistory.length === 0)) || (deviceContext && deviceContext.sellHistory && deviceContext.sellHistory.length > 0)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -174,17 +200,24 @@ export function AddTransactionDialog({
                     <SelectItem value="credit">Credit</SelectItem>
                     <SelectItem value="debit">Debit</SelectItem>
                   </>
+                ) : isNewDevice || (deviceContext && (!deviceContext.sellHistory || deviceContext.sellHistory.length === 0)) ? (
+                  <SelectItem value="sell">Sell</SelectItem>
+                ) : deviceContext ? (
+                  <SelectItem value={getInitialTransactionType()}>
+                    {getInitialTransactionType() === "sell" ? "Sell" : "Return"}
+                  </SelectItem>
                 ) : (
                   <>
                     <SelectItem value="sell">Sell</SelectItem>
                     <SelectItem value="return">Return</SelectItem>
+                    <SelectItem value="investment">Investment</SelectItem>
                   </>
                 )}
               </SelectContent>
             </Select>
           </div>
 
-          {(form.type === "return" || form.type === "sell") && (
+          {(form.type === "return" || form.type === "sell" || form.type === "investment") && (
             <div>
               <Label className="mb-3" htmlFor="paymentMode">
                 Payment Mode
@@ -207,7 +240,7 @@ export function AddTransactionDialog({
             </div>
           )}
 
-          {form.type === "return" && (
+          {form.type === "return" && !deviceContext && (
             <div>
               <Label className="mb-3" htmlFor="deviceId">
                 Device
@@ -234,10 +267,22 @@ export function AddTransactionDialog({
                   </div>
                   {devices
                     .filter((device) => {
-                      // Filter devices sold to this vendor
-                      const soldToVendor = entityType === "vendor" && device.sellHistory?.some((history: any) => 
-                        history.type === 'sell' && history.vendor?._id === entityId
-                      );
+                      if (entityType === "vendor") {
+                        const sellHistory = device.sellHistory || [];
+                        const vendorTransactions = sellHistory.filter((history: any) => 
+                          history.vendor?._id === entityId
+                        );
+                        
+                        if (vendorTransactions.length === 0) return false;
+                        
+                        // Get the latest transaction with this vendor
+                        const latestTransaction = vendorTransactions.sort((a: any, b: any) => 
+                          new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime()
+                        )[0];
+                        
+                        // Show device only if latest transaction is a sell (device is with vendor)
+                        if (latestTransaction.type !== 'sell') return false;
+                      }
                       
                       // Apply search filter
                       const matchesSearch = !deviceSearch || 
@@ -246,7 +291,7 @@ export function AddTransactionDialog({
                         device.model?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
                         device.imei1?.toLowerCase().includes(deviceSearch.toLowerCase());
                       
-                      return (entityType === "vendor" ? soldToVendor : true) && matchesSearch;
+                      return matchesSearch;
                     })
                     .map((device) => (
                       <SelectItem key={device._id} value={device._id}>

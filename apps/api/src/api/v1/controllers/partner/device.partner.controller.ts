@@ -175,5 +175,35 @@ export default class DeviceController {
     });
   });
 
+  exportEmployeeDevices = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user!;
+    const partnerId = user.role === "partner" ? user._id : user.partnerId;
+    const { pickedBy, startDate, endDate } = req.query;
+
+    if (!pickedBy) {
+      return ApiResponse.error({
+        res,
+        message: "Employee ID (pickedBy) is required",
+        statusCode: 400,
+      });
+    }
+
+    const filters = {
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate })
+    };
+
+    const response = await this.deviceService.exportEmployeeDevices(
+      partnerId as string, 
+      pickedBy as string, 
+      filters
+    );
+    return ApiResponse.success({
+      res,
+      message: response.message,
+      data: response.data,
+      statusCode: response.status,
+    });
+  });
 
 }

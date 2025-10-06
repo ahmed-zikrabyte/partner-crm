@@ -17,11 +17,13 @@ import {
   ChevronRight,
   Users,
   Building2,
-  ShoppingCart,
+  Truck,
   Clock,
-  IndianRupee,
+  Wallet,
   Smartphone,
   User,
+  LayoutDashboard,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -81,12 +83,14 @@ export function AppSidebar() {
   const getFilteredNavigationItems = (userType: string | null) => {
     if (userType === "partner") {
       return [
+        { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
         { title: "Company", url: "/company", icon: Building2 },
-        { title: "Vendor", url: "/vendor", icon: ShoppingCart },
+        { title: "Vendor", url: "/vendor", icon: Truck },
         { title: "Employee", url: "/employee", icon: Users },
         { title: "Device", url: "/device", icon: Smartphone },
         { title: "Attendance", url: "/attendance", icon: Clock },
-        { title: "Cashbook", url: "/cashbook", icon: IndianRupee },
+        { title: "Cashbook", url: "/cashbook", icon: Wallet },
+        { title: "All Transactions", url: "/transaction", icon: Receipt },
         { title: "Profile", url: "/profile", icon: User },
       ];
     }
