@@ -692,7 +692,7 @@ export default function DeviceDetailsPage() {
                           }
                         }
                         financialDetail = cumulativeSelling - device.totalCost;
-                        financialLabel = "Cumulative P/L";
+                        financialLabel = "Profit/Loss";
                       } else if (transaction.type === "return") {
                         // For returns: show previous sell amount - return amount
                         const previousSells = device.sellHistory?.slice(0, index).filter(t => t.type === "sell") || [];
