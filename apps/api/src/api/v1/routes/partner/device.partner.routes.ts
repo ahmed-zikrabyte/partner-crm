@@ -54,6 +54,9 @@ deviceRouter.get("/export/return", (req: Request, res: Response, next: NextFunct
   deviceController.exportReturnDevices(req, res, next)
 );
 
-
+// Export employee devices
+deviceRouter.get("/export/employee", (req: Request, res: Response, next: NextFunction) =>
+  deviceController.exportEmployeeDevices(req, res, next)
+);
 
 export default deviceRouter;

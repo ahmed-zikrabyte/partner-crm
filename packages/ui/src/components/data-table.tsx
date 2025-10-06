@@ -34,12 +34,16 @@ export interface DataTableProps<TData, TValue> {
     totalPages: number;
   };
   onPaginationChange?: (newPage: number) => void;
+  loading?: boolean;
+  getRowClassName?: (row: TData) => string;
 }
 export function DataTable<TData, TValue>({
   onPaginationChange,
   columns,
   data,
   pagination,
+  loading,
+  getRowClassName,
 }: DataTableProps<TData, TValue>) {
   const { currentPage, hasNext, hasPrev, totalPages } =
     pagination || {};
@@ -98,6 +102,7 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className={getRowClassName?.(row.original) || ""}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
@@ -115,7 +120,7 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results.
+                  {loading ? "Loading..." : "No results."}
                 </TableCell>
               </TableRow>
             )}

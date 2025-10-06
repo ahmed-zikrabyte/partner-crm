@@ -1,6 +1,6 @@
 import axiosInstance from "@/lib/axios";
 
-export type TransactionType = "return" | "sell" | "credit" | "debit";
+export type TransactionType = "return" | "sell" | "credit" | "debit" | "investment";
 
 export interface TransactionPayload {
   vendorId?: string;       // optional for internal transactions
@@ -30,16 +30,22 @@ export const getAllTransactions = async ({
   search,
   startDate,
   endDate,
+  page,
+  limit,
+  paymentMode,
 }: {
   vendorId?: string;
   type?: TransactionType;
   search?: string;
   startDate?: string;
   endDate?: string;
+  page?: number;
+  limit?: number;
+  paymentMode?: "cash" | "upi" | "card";
 } = {}) => {
   try {
     const response = await axiosInstance.get("/partner/transaction", {
-      params: { vendorId, type, search, startDate, endDate },
+      params: { vendorId, type, search, startDate, endDate, page, limit, paymentMode },
     });
     return response.data;
   } catch (error) {
@@ -65,15 +71,17 @@ export const exportTransactions = async ({
   type,
   startDate,
   endDate,
+  search,
 }: {
   vendorId?: string;
   type?: TransactionType;
   startDate?: string;
   endDate?: string;
+  search?: string;
 } = {}) => {
   try {
     const response = await axiosInstance.get("/partner/transaction/export/all", {
-      params: { vendorId, type, startDate, endDate },
+      params: { vendorId, type, startDate, endDate, search },
     });
     return response.data;
   } catch (error) {

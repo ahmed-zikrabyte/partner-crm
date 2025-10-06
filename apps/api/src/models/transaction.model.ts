@@ -11,7 +11,7 @@ export interface ITransaction {
   amount: number;
   note: string;
   paymentMode?: "upi" | "card" | "cash";
-  type: "return" | "sell" | "credit" | "debit";
+  type: "return" | "sell" | "credit" | "debit" | "investment";
   date: Date;
 }
 
@@ -38,7 +38,7 @@ const transactionSchema = new mongoose.Schema<ITransaction>(
       type: mongoose.Schema.Types.ObjectId,
       ref: "vendor",
       required: function () {
-        return this.type === "sell" || this.type === "return";
+        return this.type === "sell" || this.type === "return" || this.type === "investment";
       },
     },
     deviceId: {
@@ -54,12 +54,12 @@ const transactionSchema = new mongoose.Schema<ITransaction>(
       type: String,
       enum: ["upi", "card", "cash"],
       required: function () {
-        return this.type === "sell" || this.type === "return";
+        return this.type === "sell" || this.type === "return" || this.type === "investment";
       },
     },
     type: {
       type: String,
-      enum: ["return", "sell", "credit", "debit"],
+      enum: ["return", "sell", "credit", "debit", "investment"],
       required: true,
     },
     date: { type: Date, default: Date.now },
