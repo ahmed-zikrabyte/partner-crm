@@ -267,10 +267,22 @@ export function AddTransactionDialog({
                   </div>
                   {devices
                     .filter((device) => {
-                      // Filter devices sold to this vendor
-                      const soldToVendor = entityType === "vendor" && device.sellHistory?.some((history: any) => 
-                        history.type === 'sell' && history.vendor?._id === entityId
-                      );
+                      if (entityType === "vendor") {
+                        const sellHistory = device.sellHistory || [];
+                        const vendorTransactions = sellHistory.filter((history: any) => 
+                          history.vendor?._id === entityId
+                        );
+                        
+                        if (vendorTransactions.length === 0) return false;
+                        
+                        // Get the latest transaction with this vendor
+                        const latestTransaction = vendorTransactions.sort((a: any, b: any) => 
+                          new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime()
+                        )[0];
+                        
+                        // Show device only if latest transaction is a sell (device is with vendor)
+                        if (latestTransaction.type !== 'sell') return false;
+                      }
                       
                       // Apply search filter
                       const matchesSearch = !deviceSearch || 
@@ -279,7 +291,7 @@ export function AddTransactionDialog({
                         device.model?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
                         device.imei1?.toLowerCase().includes(deviceSearch.toLowerCase());
                       
-                      return (entityType === "vendor" ? soldToVendor : true) && matchesSearch;
+                      return matchesSearch;
                     })
                     .map((device) => (
                       <SelectItem key={device._id} value={device._id}>

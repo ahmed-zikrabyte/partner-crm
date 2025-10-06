@@ -10,6 +10,7 @@ import deviceRouter from "./device.partner.routes";
 import employeeRouter from "./employee.partner.routes";
 import attendanceRouter from "./attendance.partner.routes";
 import transactionRouter from "./transaction.partner.routes";
+import dashboardRouter from "./dashboard.partner.routes";
 
 const partnerRoutes: express.Router = express.Router();
 
@@ -17,6 +18,7 @@ partnerRoutes.use("/auth", partnerAuthRouter);
 
 partnerRoutes.use(protectUser);
 
+partnerRoutes.use("/dashboard", dashboardRouter);
 partnerRoutes.use("/employees", restrictUserTo("partner"), employeeRouter);
 partnerRoutes.use("/attendance", restrictUserTo("partner"), attendanceRouter);
 partnerRoutes.use("/companies", companyAuthRouter);

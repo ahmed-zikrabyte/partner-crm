@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import axiosInstance from "@/lib/axios";
 
 export interface DevicePayload {
@@ -229,6 +230,31 @@ export const exportReturnDevices = async ({
     return response.data;
   } catch (error) {
     console.error("Error exporting return devices:", error);
+    throw error;
+  }
+};
+
+// ✅ Export all devices for employee
+export const exportEmployeeDevices = async ({
+  pickedBy,
+  startDate,
+  endDate,
+}: {
+  pickedBy: string;
+  startDate?: string;
+  endDate?: string;
+}) => {
+  try {
+    const params: any = { pickedBy };
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    
+    const response = await axiosInstance.get("/partner/devices/export/employee", {
+      params,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error exporting employee devices:", error);
     throw error;
   }
 };

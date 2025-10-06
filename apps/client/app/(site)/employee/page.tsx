@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { EditIcon, Eye, Trash } from "lucide-react";
+import { EditIcon, Eye, Trash, Smartphone } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Switch } from "@workspace/ui/components/switch";
@@ -25,6 +26,7 @@ import type { EmployeeData } from "@/components/employee/employee.schema";
 import { toast } from "sonner";
 
 export default function EmployeePage() {
+  const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -212,11 +214,8 @@ export default function EmployeePage() {
           <Button
             size="icon"
             variant="outline"
-            onClick={() => {
-              setSelectedEmployee(row.original);
-              setModalMode("view");
-              setOpenModal(true);
-            }}
+            onClick={() => router.push(`/employee/${row.original._id}/devices`)}
+            title="View Devices"
           >
             <Eye className="w-4 h-4" />
           </Button>

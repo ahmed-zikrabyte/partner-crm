@@ -23,7 +23,10 @@ import {
 import type { ColumnDef } from "@tanstack/react-table";
 import { getVendorById } from "@/services/vendorService";
 import { getAllDevices } from "@/services/deviceService";
-import { getAllTransactions, exportTransactions } from "@/services/transactionService";
+import {
+  getAllTransactions,
+  exportTransactions,
+} from "@/services/transactionService";
 import { AddTransactionDialog } from "@/components/global/add-transaction-dialog";
 import type { VendorData } from "@/components/vendor/vendor.schema";
 import { toast } from "sonner";
@@ -66,30 +69,50 @@ export default function VendorDetailsPage({
         const [vendorRes, devicesRes, transactionsRes] = await Promise.all([
           getVendorById(resolvedParams.id),
           getAllDevices({ limit: 0 }),
-          getAllTransactions({ vendorId: resolvedParams.id, search, startDate, endDate }),
+          getAllTransactions({
+            vendorId: resolvedParams.id,
+            search,
+            startDate,
+            endDate,
+          }),
         ]);
 
+        console.log("Transactions API Response:", transactionsRes);
+
+        // Handle different possible response structures for transactions
+        const transactionsData =
+          transactionsRes.data?.transactions ||
+          transactionsRes.transactions ||
+          transactionsRes.data ||
+          [];
+        console.log("Extracted transactions data:", transactionsData);
+
         // Filter devices based on latest transaction with this vendor
-        const vendorDevices = devicesRes.data.devices?.filter((device: any) => {
-          const sellHistory = device.sellHistory || [];
-          const vendorTransactions = sellHistory.filter((history: any) => 
-            history.vendor?._id === resolvedParams.id
-          );
-          
-          if (vendorTransactions.length === 0) return false;
-          
-          // Get the latest transaction with this vendor
-          const latestTransaction = vendorTransactions.sort((a: any, b: any) => 
-            new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime()
-          )[0];
-          
-          // Show device only if latest transaction is a sell
-          return latestTransaction.type === 'sell';
-        }) || [];
+        const vendorDevices =
+          devicesRes.data.devices?.filter((device: any) => {
+            const sellHistory = device.sellHistory || [];
+            const vendorTransactions = sellHistory.filter(
+              (history: any) => history.vendor?._id === resolvedParams.id
+            );
+
+            if (vendorTransactions.length === 0) return false;
+
+            // Get the latest transaction with this vendor
+            const latestTransaction = vendorTransactions.sort(
+              (a: any, b: any) =>
+                new Date(b.createdAt || b.date).getTime() -
+                new Date(a.createdAt || a.date).getTime()
+            )[0];
+
+            // Show device only if latest transaction is a sell
+            return latestTransaction.type === "sell";
+          }) || [];
 
         setVendor(vendorRes.data);
         setDevices(vendorDevices);
-        setTransactions(transactionsRes.data || []);
+        setTransactions(
+          Array.isArray(transactionsData) ? transactionsData : []
+        );
       } catch (err: any) {
         console.error(err);
         toast.error("Failed to fetch vendor details");
@@ -107,9 +130,9 @@ export default function VendorDetailsPage({
       if (search) filters.search = search;
       if (startDate) filters.startDate = startDate;
       if (endDate) filters.endDate = endDate;
-      
+
       const response = await exportTransactions(filters);
-      
+
       const csvContent = convertToCSV(response.data);
       const blob = new Blob([csvContent], { type: "text/csv" });
       const url = window.URL.createObjectURL(blob);
@@ -118,7 +141,7 @@ export default function VendorDetailsPage({
       a.download = `vendor-${vendor?.name}-transactions-${new Date().toISOString().split("T")[0]}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
-      
+
       toast.success("Transactions exported successfully");
     } catch (error) {
       toast.error("Failed to export transactions");
@@ -154,9 +177,15 @@ export default function VendorDetailsPage({
       header: "Latest Selling Price",
       cell: ({ row }) => {
         const device = row.original as any;
-        const sellHistory = device.sellHistory?.filter((h: any) => h.type === 'sell') || [];
-        const latestSell = sellHistory.sort((a: any, b: any) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())[0];
-        const sellingPrice = latestSell?.selling || latestSell?.amount || device.selling || 0;
+        const sellHistory =
+          device.sellHistory?.filter((h: any) => h.type === "sell") || [];
+        const latestSell = sellHistory.sort(
+          (a: any, b: any) =>
+            new Date(b.createdAt || b.date).getTime() -
+            new Date(a.createdAt || a.date).getTime()
+        )[0];
+        const sellingPrice =
+          latestSell?.selling || latestSell?.amount || device.selling || 0;
         return `₹${sellingPrice}`;
       },
     },
@@ -165,18 +194,11 @@ export default function VendorDetailsPage({
       header: "Returns",
       cell: ({ row }) => {
         const device = row.original as any;
-        const returnCount = device.sellHistory?.filter((h: any) => h.type === 'return').length || 0;
+        const returnCount =
+          device.sellHistory?.filter((h: any) => h.type === "return").length ||
+          0;
         return returnCount;
       },
-    },
-    {
-      accessorKey: "isActive",
-      header: "Status",
-      cell: ({ row }) => (
-        <Badge variant={row.original.isActive ? "default" : "secondary"}>
-          {row.original.isActive ? "Active" : "Inactive"}
-        </Badge>
-      ),
     },
   ];
 
@@ -209,10 +231,12 @@ export default function VendorDetailsPage({
       cell: ({ row }) => row.original.note || "-",
     },
     {
-      accessorKey: "date",
+      accessorKey: "createdAt",
       header: "Date",
       cell: ({ row }) =>
-        new Date(row.original.date).toLocaleDateString("en-GB", {
+        new Date(
+          row.original.createdAt || row.original.date
+        ).toLocaleDateString("en-GB", {
           day: "2-digit",
           month: "2-digit",
           year: "numeric",
@@ -303,7 +327,7 @@ export default function VendorDetailsPage({
                   Export Transactions
                 </Button>
               </div>
-              
+
               <div className="flex gap-3 items-center flex-wrap mt-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -314,7 +338,7 @@ export default function VendorDetailsPage({
                     className="pl-10 w-64"
                   />
                 </div>
-                
+
                 <Input
                   type="date"
                   placeholder="Start Date"
@@ -322,7 +346,7 @@ export default function VendorDetailsPage({
                   onChange={(e) => setStartDate(e.target.value)}
                   className="w-40"
                 />
-                
+
                 <Input
                   type="date"
                   placeholder="End Date"
@@ -330,9 +354,9 @@ export default function VendorDetailsPage({
                   onChange={(e) => setEndDate(e.target.value)}
                   className="w-40"
                 />
-                
-                <Button 
-                  variant="outline" 
+
+                <Button
+                  variant="outline"
                   onClick={() => {
                     setSearch("");
                     setStartDate("");
@@ -365,7 +389,7 @@ export default function VendorDetailsPage({
               <div className="flex justify-between items-center">
                 <CardTitle>Devices</CardTitle>
               </div>
-              
+
               <div className="flex gap-3 items-center flex-wrap mt-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -376,23 +400,29 @@ export default function VendorDetailsPage({
                     className="pl-10 w-80"
                   />
                 </div>
-                
-                <Button 
-                  variant="outline" 
-                  onClick={() => setDeviceSearch("")}
-                >
+
+                <Button variant="outline" onClick={() => setDeviceSearch("")}>
                   Clear Search
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
               <DataTable
-                data={devices.filter(device => 
-                  !deviceSearch || 
-                  device.deviceId?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
-                  device.brand?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
-                  device.model?.toLowerCase().includes(deviceSearch.toLowerCase()) ||
-                  device.imei1?.toLowerCase().includes(deviceSearch.toLowerCase())
+                data={devices.filter(
+                  (device) =>
+                    !deviceSearch ||
+                    device.deviceId
+                      ?.toLowerCase()
+                      .includes(deviceSearch.toLowerCase()) ||
+                    device.brand
+                      ?.toLowerCase()
+                      .includes(deviceSearch.toLowerCase()) ||
+                    device.model
+                      ?.toLowerCase()
+                      .includes(deviceSearch.toLowerCase()) ||
+                    device.imei1
+                      ?.toLowerCase()
+                      .includes(deviceSearch.toLowerCase())
                 )}
                 columns={deviceColumns}
                 pagination={{
@@ -416,7 +446,12 @@ export default function VendorDetailsPage({
         onSuccess={async () => {
           const [vendorRes, transactionsRes] = await Promise.all([
             getVendorById(vendorId),
-            getAllTransactions({ vendorId: vendorId, search, startDate, endDate }),
+            getAllTransactions({
+              vendorId: vendorId,
+              search,
+              startDate,
+              endDate,
+            }),
           ]);
           setVendor(vendorRes.data);
           setTransactions(transactionsRes.data || []);

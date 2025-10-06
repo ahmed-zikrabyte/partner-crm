@@ -636,22 +636,31 @@ export default function DeviceDetailsPage() {
                       </div>
                     );
                   })()}
-                  {device.profit !== undefined && (
-                    <div
-                      className={`p-3 rounded-lg ${device.profit >= 0 ? "bg-green-50 border-2 border-green-200" : "bg-red-50 border-2 border-red-200"}`}
-                    >
-                      <label
-                        className={`text-xs font-medium uppercase tracking-wide ${device.profit >= 0 ? "text-green-600" : "text-red-600"}`}
-                      >
-                        Profit/Loss
-                      </label>
-                      <p
-                        className={`text-xl font-bold mt-1 ${device.profit >= 0 ? "text-green-900" : "text-red-900"}`}
-                      >
-                        ₹{device.profit}
-                      </p>
-                    </div>
-                  )}
+                  {(() => {
+                    // Calculate profit using backend logic: (total sells - total returns) - total cost
+                    let effectiveSelling = 0;
+                    if (device.sellHistory && device.sellHistory.length > 0) {
+                      for (const h of device.sellHistory) {
+                        if (h.type === "sell" && (h.selling || h.amount)) {
+                          effectiveSelling += h.selling || h.amount || 0;
+                        } else if (h.type === "return" && (h.returnAmount || h.amount)) {
+                          effectiveSelling -= h.returnAmount || h.amount || 0;
+                        }
+                      }
+                    }
+                    const calculatedProfit = effectiveSelling - device.totalCost;
+                    
+                    return (
+                      <div className={`p-3 rounded-lg ${calculatedProfit >= 0 ? "bg-green-50 border-2 border-green-200" : "bg-red-50 border-2 border-red-200"}`}>
+                        <label className={`text-xs font-medium uppercase tracking-wide ${calculatedProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          Profit/Loss
+                        </label>
+                        <p className={`text-xl font-bold mt-1 ${calculatedProfit >= 0 ? "text-green-900" : "text-red-900"}`}>
+                          ₹{calculatedProfit}
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>
@@ -665,65 +674,104 @@ export default function DeviceDetailsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {device.sellHistory.map((transaction, index) => (
-                      <div
-                        key={index}
-                        className={`p-4 rounded-lg border-l-4 ${
-                          transaction.type === "sell"
-                            ? "bg-green-50 border-green-400"
-                            : "bg-red-50 border-red-400"
-                        }`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge
-                                variant={
-                                  transaction.type === "sell"
-                                    ? "default"
-                                    : "destructive"
-                                }
-                              >
+                    {device.sellHistory.map((transaction, index) => {
+                      const transactionAmount = transaction.selling || transaction.returnAmount || transaction.amount || 0;
+                      
+                      let financialDetail = null;
+                      let financialLabel = "";
+                      
+                      if (transaction.type === "sell") {
+                        // For sells: calculate cumulative profit up to this point
+                        let cumulativeSelling = 0;
+                        for (let i = 0; i <= index; i++) {
+                          const h = device.sellHistory?.[i];
+                          if (h && h.type === "sell" && (h.selling || h.amount)) {
+                            cumulativeSelling += h.selling || h.amount || 0;
+                          } else if (h && h.type === "return" && (h.returnAmount || h.amount)) {
+                            cumulativeSelling -= h.returnAmount || h.amount || 0;
+                          }
+                        }
+                        financialDetail = cumulativeSelling - device.totalCost;
+                        financialLabel = "Cumulative P/L";
+                      } else if (transaction.type === "return") {
+                        // For returns: show previous sell amount - return amount
+                        const previousSells = device.sellHistory?.slice(0, index).filter(t => t.type === "sell") || [];
+                        if (previousSells.length > 0) {
+                          const lastSell = previousSells[previousSells.length - 1];
+                          if (lastSell) {
+                            const lastSellAmount = lastSell.selling || lastSell.amount || 0;
+                            financialDetail = lastSellAmount - transactionAmount;
+                            financialLabel = "Surplus";
+                          }
+                        }
+                      }
+                      
+                      return (
+                        <div
+                          key={index}
+                          className={`p-4 rounded-lg border-l-4 ${
+                            transaction.type === "sell"
+                              ? "bg-green-50 border-green-400"
+                              : "bg-red-50 border-red-400"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge
+                                  variant={
+                                    transaction.type === "sell"
+                                      ? "default"
+                                      : "destructive"
+                                  }
+                                >
+                                  {transaction.type === "sell"
+                                    ? "SOLD"
+                                    : "RETURNED"}
+                                </Badge>
+                                <span className="text-sm text-gray-500">
+                                  {new Date(
+                                    transaction.createdAt
+                                  ).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <p className="font-medium text-gray-900">
                                 {transaction.type === "sell"
-                                  ? "SOLD"
-                                  : "RETURNED"}
-                              </Badge>
-                              <span className="text-sm text-gray-500">
-                                {new Date(
-                                  transaction.createdAt
-                                ).toLocaleDateString()}
-                              </span>
+                                  ? "Sold to"
+                                  : "Returned from"}
+                                :{" "}
+                                {getVendorName(
+                                  typeof transaction.vendor === "object"
+                                    ? transaction.vendor._id
+                                    : transaction.vendor
+                                )}
+                              </p>
                             </div>
-                            <p className="font-medium text-gray-900">
-                              {transaction.type === "sell"
-                                ? "Sold to"
-                                : "Returned from"}
-                              :{" "}
-                              {getVendorName(
-                                typeof transaction.vendor === "object"
-                                  ? transaction.vendor._id
-                                  : transaction.vendor
+                            <div className="text-right space-y-1">
+                              <p
+                                className={`text-lg font-bold ${
+                                  transaction.type === "sell"
+                                    ? "text-green-600"
+                                    : "text-red-600"
+                                }`}
+                              >
+                                ₹{transactionAmount}
+                              </p>
+                              {financialDetail !== null && (
+                                <div className={`text-sm font-medium px-2 py-1 rounded ${
+                                  financialDetail >= 0 
+                                    ? "bg-green-100 text-green-700" 
+                                    : "bg-red-100 text-red-700"
+                                }`}>
+                                  {financialLabel}: {financialDetail >= 0 ? "+" : ""}₹{financialDetail}
+                                  {transaction.type === "return" && financialDetail < 0 && " (Surplus)"}
+                                </div>
                               )}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p
-                              className={`text-lg font-bold ${
-                                transaction.type === "sell"
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }`}
-                            >
-                              ₹
-                              {transaction.selling ||
-                                transaction.returnAmount ||
-                                transaction.amount ||
-                                0}
-                            </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -759,6 +807,10 @@ export default function DeviceDetailsPage() {
               : lastEntry.vendor || "";
           })()}
           entityType="vendor"
+          deviceContext={{
+            deviceId: device._id,
+            sellHistory: device.sellHistory
+          }}
           onSuccess={() => {
             toast.success("Transaction recorded for vendor");
           }}

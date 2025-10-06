@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { EditIcon, Eye, Trash, Download } from "lucide-react";
+import { EditIcon, Eye, Trash, Download, X } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import {
@@ -55,8 +55,15 @@ export default function DevicePage() {
   const [filters, setFilters] = useState({
     companyIds: "",
     pickedBy: "",
+    vendorId: "",
     startDate: "",
     endDate: "",
+  });
+  
+  const [searchStates, setSearchStates] = useState({
+    vendor: "",
+    company: "",
+    employee: "",
   });
   
   const [vendors, setVendors] = useState([]);
@@ -121,6 +128,7 @@ export default function DevicePage() {
         // Add additional filters
         if (filters.companyIds) filter.companyIds = filters.companyIds;
         if (filters.pickedBy) filter.pickedBy = filters.pickedBy;
+        if (filters.vendorId) filter.vendorId = filters.vendorId;
         if (filters.startDate) filter.startDate = filters.startDate;
         if (filters.endDate) filter.endDate = filters.endDate;
 
@@ -177,13 +185,25 @@ export default function DevicePage() {
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     setCurrentPage(1);
-    setFilters({ companyIds: "", pickedBy: "", startDate: "", endDate: "" });
+    setFilters({ companyIds: "", pickedBy: "", vendorId: "", startDate: "", endDate: "" });
+    setSearchStates({ vendor: "", company: "", employee: "" });
   };
 
   const handleFilterChange = (key: string, value: string) => {
     const filterValue = value === "all" ? "" : value;
     setFilters((prev) => ({ ...prev, [key]: filterValue }));
     setCurrentPage(1);
+  };
+
+  const clearAllFilters = () => {
+    setFilters({ companyIds: "", pickedBy: "", vendorId: "", startDate: "", endDate: "" });
+    setSearchStates({ vendor: "", company: "", employee: "" });
+    setSearch("");
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters = () => {
+    return search || filters.companyIds || filters.pickedBy || filters.vendorId || filters.startDate || filters.endDate;
   };
 
   const refreshData = async () => {
@@ -205,6 +225,7 @@ export default function DevicePage() {
 
       if (filters.companyIds) filter.companyIds = filters.companyIds;
       if (filters.pickedBy) filter.pickedBy = filters.pickedBy;
+      if (filters.vendorId) filter.vendorId = filters.vendorId;
       if (filters.startDate) filter.startDate = filters.startDate;
       if (filters.endDate) filter.endDate = filters.endDate;
 
@@ -233,6 +254,7 @@ export default function DevicePage() {
       const exportFilters = {
         ...(filters.companyIds && { companyIds: filters.companyIds }),
         ...(filters.pickedBy && { pickedBy: filters.pickedBy }),
+        ...(filters.vendorId && { vendorId: filters.vendorId }),
         ...(filters.startDate && { startDate: filters.startDate }),
         ...(filters.endDate && { endDate: filters.endDate }),
       };
@@ -433,6 +455,12 @@ export default function DevicePage() {
           <div className="flex justify-between items-center">
             <div className="text-lg font-bold">Devices</div>
             <div className="flex gap-2">
+              {hasActiveFilters() && (
+                <Button variant="outline" onClick={clearAllFilters}>
+                  <X className="w-4 h-4 mr-2" />
+                  Clear Filters
+                </Button>
+              )}
               <Button onClick={() => router.push("/device/create")}>
                 Add Device
               </Button>
@@ -459,14 +487,27 @@ export default function DevicePage() {
                   <SelectValue placeholder="All Companies" />
                 </SelectTrigger>
                 <SelectContent>
+                  <div className="p-2">
+                    <Input
+                      placeholder="Search companies..."
+                      value={searchStates.company}
+                      onChange={(e) => setSearchStates(prev => ({ ...prev, company: e.target.value }))}
+                      className="mb-2"
+                    />
+                  </div>
                   <SelectItem value="all">All Companies</SelectItem>
-                  {companies.map((company: any) => (
-                    <SelectItem key={company._id} value={company._id}>
-                      {company.name}
-                    </SelectItem>
-                  ))}
+                  {companies
+                    .filter((company: any) => 
+                      company.name.toLowerCase().includes(searchStates.company.toLowerCase())
+                    )
+                    .map((company: any) => (
+                      <SelectItem key={company._id} value={company._id}>
+                        {company.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
+              
               <Select
                 value={filters.pickedBy || undefined}
                 onValueChange={(value) =>
@@ -477,12 +518,55 @@ export default function DevicePage() {
                   <SelectValue placeholder="All Employees" />
                 </SelectTrigger>
                 <SelectContent>
+                  <div className="p-2">
+                    <Input
+                      placeholder="Search employees..."
+                      value={searchStates.employee}
+                      onChange={(e) => setSearchStates(prev => ({ ...prev, employee: e.target.value }))}
+                      className="mb-2"
+                    />
+                  </div>
                   <SelectItem value="all">All Employees</SelectItem>
-                  {employees.map((employee: any) => (
-                    <SelectItem key={employee._id} value={employee._id}>
-                      {employee.name}
-                    </SelectItem>
-                  ))}
+                  {employees
+                    .filter((employee: any) => 
+                      employee.name.toLowerCase().includes(searchStates.employee.toLowerCase())
+                    )
+                    .map((employee: any) => (
+                      <SelectItem key={employee._id} value={employee._id}>
+                        {employee.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              
+              <Select
+                value={filters.vendorId || undefined}
+                onValueChange={(value) =>
+                  handleFilterChange("vendorId", value || "")
+                }
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="All Vendors" />
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="p-2">
+                    <Input
+                      placeholder="Search vendors..."
+                      value={searchStates.vendor}
+                      onChange={(e) => setSearchStates(prev => ({ ...prev, vendor: e.target.value }))}
+                      className="mb-2"
+                    />
+                  </div>
+                  <SelectItem value="all">All Vendors</SelectItem>
+                  {vendors
+                    .filter((vendor: any) => 
+                      vendor.name.toLowerCase().includes(searchStates.vendor.toLowerCase())
+                    )
+                    .map((vendor: any) => (
+                      <SelectItem key={vendor._id} value={vendor._id}>
+                        {vendor.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               
