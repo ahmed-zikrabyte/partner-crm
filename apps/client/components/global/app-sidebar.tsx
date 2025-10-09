@@ -24,6 +24,7 @@ import {
   User,
   LayoutDashboard,
   Receipt,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -91,6 +92,7 @@ export function AppSidebar() {
         { title: "Attendance", url: "/attendance", icon: Clock },
         { title: "Cashbook", url: "/cashbook", icon: Wallet },
         { title: "All Transactions", url: "/transaction", icon: Receipt },
+        { title: "Reports", url: "/reports", icon: BarChart3 },
         { title: "Profile", url: "/profile", icon: User },
       ];
     }
