@@ -1,18 +1,26 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Badge } from "@workspace/ui/components/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@workspace/ui/components/select";
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@workspace/ui/components/tabs";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "@workspace/ui/components/searchable-select";
 import {
   Download,
   FileSpreadsheet,
@@ -23,40 +31,32 @@ import {
   Building2,
   Calendar,
   Filter,
-  BarChart3
+  BarChart3,
+  Eye,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { DataTable } from "@workspace/ui/components/data-table";
 import type { ColumnDef } from "@tanstack/react-table";
+import { useRouter } from "next/navigation";
 
 // Import services
 import { getAllDevices } from "@/services/deviceService";
 import { getAllTransactions } from "@/services/transactionService";
 import { getAllVendors } from "@/services/vendorService";
 import { getAllCompanies } from "@/services/companyService";
+import { getAllEmployees } from "@/services/employeeService";
 
 // Excel export utility
-import * as XLSX from 'xlsx';
+import * as XLSX from "xlsx";
 
 interface ReportFilters {
   startDate: string;
   endDate: string;
   vendorId?: string;
   companyId?: string;
-  deviceId?: string;
-}
-
-interface ProfitData {
-  deviceId: string;
-  deviceModel: string;
-  deviceBrand: string;
-  initialCost: number;
-  sellingPrice: number;
-  profit: number;
-  soldDate: string;
-  vendor: string;
-  company: string;
+  employeeId?: string;
 }
 
 interface DeviceData {
@@ -70,12 +70,16 @@ interface DeviceData {
   cost: number;
   credit: number;
   selling?: number;
-  profit?: number;
   soldTo?: string;
-  pickedBy: string;
+  pickedBy: any;
+  companyIds: any;
+  selectedCompanyIds?: any;
+  sellHistory?: any[];
   warranty: string;
   issues: string;
   createdAt: string;
+  status: string;
+  profit?: number;
 }
 
 interface TransactionData {
@@ -99,6 +103,8 @@ interface VendorReportData {
   totalReturns: number;
   devicesSold: number;
   lastTransactionDate: string;
+  vendorAmount?: number;
+  isActive?: boolean;
 }
 
 interface CompanyReportData {
@@ -108,10 +114,27 @@ interface CompanyReportData {
   soldDevices: number;
   availableDevices: number;
   totalValue: number;
-  totalProfit: number;
+  creditValue: number;
+  isActive: boolean;
+  companyIds: string[];
+}
+
+interface EmployeeReportData {
+  employeeId: string;
+  employeeName: string;
+  email: string;
+  phone: string;
+  salaryPerDay: number;
+  isActive: boolean;
+  totalDevicesHandled: number;
+  soldDevices: number;
+  availableDevices: number;
+  totalSalesValue: number;
+  lastActivity: string;
 }
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [filters, setFilters] = useState<ReportFilters>({
     startDate: "",
     endDate: "",
@@ -120,97 +143,167 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [vendors, setVendors] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
 
   // Data states
-  const [profitData, setProfitData] = useState<ProfitData[]>([]);
   const [deviceData, setDeviceData] = useState<DeviceData[]>([]);
   const [transactionData, setTransactionData] = useState<TransactionData[]>([]);
   const [vendorReports, setVendorReports] = useState<VendorReportData[]>([]);
   const [companyReports, setCompanyReports] = useState<CompanyReportData[]>([]);
+  const [employeeReports, setEmployeeReports] = useState<EmployeeReportData[]>(
+    []
+  );
+
+  // Pagination states for each table
+  const [devicePage, setDevicePage] = useState(1);
+  const [transactionPage, setTransactionPage] = useState(1);
+  const [vendorPage, setVendorPage] = useState(1);
+  const [companyPage, setCompanyPage] = useState(1);
+  const [employeePage, setEmployeePage] = useState(1);
+  
+  const [devicePagination, setDevicePagination] = useState({
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
+  });
+  const [transactionPagination, setTransactionPagination] = useState({
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
+  });
+  const [vendorPagination, setVendorPagination] = useState({
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
+  });
+  const [companyPagination, setCompanyPagination] = useState({
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
+  });
+  const [employeePagination, setEmployeePagination] = useState({
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
+  });
+
+
+
+
 
   // Fetch initial data
   useEffect(() => {
     fetchInitialData();
+    loadAllData(); // Load all data initially
   }, []);
 
   const fetchInitialData = async () => {
     try {
-      const [vendorsRes, companiesRes] = await Promise.all([
+      const [vendorsRes, companiesRes, employeesRes] = await Promise.all([
         getAllVendors({ limit: 0 }),
-        getAllCompanies({ limit: 0 })
+        getAllCompanies({ limit: 0 }),
+        getAllEmployees({ limit: 0 }),
       ]);
 
-      setVendors(vendorsRes.data?.vendors || vendorsRes.vendors || vendorsRes.data || []);
-      setCompanies(companiesRes.data?.companies || companiesRes.companies || companiesRes.data || []);
+      const vendorsData =
+        vendorsRes.data?.vendors || vendorsRes.vendors || vendorsRes.data || [];
+      const companiesData =
+        companiesRes.data?.companies ||
+        companiesRes.companies ||
+        companiesRes.data ||
+        [];
+      const employeesData =
+        employeesRes.data?.employees ||
+        employeesRes.employees ||
+        employeesRes.data ||
+        [];
+
+      setVendors(vendorsData);
+      setCompanies(companiesData);
+      setEmployees(employeesData);
     } catch (error) {
       console.error("Error fetching initial data:", error);
       toast.error("Failed to load initial data");
     }
   };
 
-  const fetchReportsData = async () => {
-    if (!filters.startDate || !filters.endDate) {
-      toast.error("Please select both start and end dates");
-      return;
-    }
-
+  const loadAllData = async () => {
     setLoading(true);
     try {
-      // Fetch all data with filters
-      const [devicesRes, transactionsRes] = await Promise.all([
-        getAllDevices({
-          limit: 0,
-          startDate: filters.startDate,
-          endDate: filters.endDate,
-          ...(filters.companyId && { companyId: filters.companyId })
-        }),
-        getAllTransactions({
-          limit: 0,
-          startDate: filters.startDate,
-          endDate: filters.endDate,
-          ...(filters.vendorId && { vendorId: filters.vendorId })
-        })
+      // Fetch all data without any filters
+      const [devicesRes, transactionsRes, vendorsRes, companiesRes, employeesRes] = await Promise.all([
+        getAllDevices({ page: devicePage }),
+        getAllTransactions({ page: transactionPage }),
+        getAllVendors({ page: vendorPage }),
+        getAllCompanies({ page: companyPage }),
+        getAllEmployees({ page: employeePage }),
       ]);
 
-      const devices = devicesRes.data?.devices || devicesRes.devices || devicesRes.data || [];
-      const transactions = transactionsRes.data?.transactions || transactionsRes.transactions || transactionsRes.data || [];
-
-      console.log("Devices fetched:", devices?.length || 0);
-      console.log("Transactions fetched:", transactions?.length || 0);
-
-      // Process profit data
-      const profits: ProfitData[] = devices
-        .filter((device: any) => device.selling && device.profit)
-        .map((device: any) => ({
-          deviceId: device.deviceId || device._id,
-          deviceModel: device.model,
-          deviceBrand: device.brand,
-          initialCost: device.initialCost,
-          sellingPrice: device.selling,
-          profit: device.profit,
-          soldDate: device.sellHistory?.[0]?.createdAt || device.updatedAt,
-          vendor: device.sellHistory?.[0]?.vendor?.name || device.soldTo || "N/A",
-          company: device.selectedCompanyIds || "N/A"
-        }));
+      const devices = devicesRes.data?.devices || [];
+      const transactions = transactionsRes.data?.transactions || [];
+      const vendorsData = vendorsRes.data?.vendors || vendorsRes.vendors || vendorsRes.data || [];
+      const companiesData = companiesRes.data?.companies || companiesRes.companies || companiesRes.data || [];
+      const employeesData = employeesRes.data?.employees || employeesRes.employees || employeesRes.data || [];
+      
+      // Set pagination info for all tables
+      if (devicesRes.data?.pagination) {
+        setDevicePagination({
+          totalPages: devicesRes.data.pagination.totalPages,
+          hasNext: devicesRes.data.pagination.hasNext,
+          hasPrev: devicesRes.data.pagination.hasPrev,
+        });
+      }
+      if (transactionsRes.data?.pagination) {
+        setTransactionPagination({
+          totalPages: transactionsRes.data.pagination.totalPages,
+          hasNext: transactionsRes.data.pagination.hasNext,
+          hasPrev: transactionsRes.data.pagination.hasPrev,
+        });
+      }
+      if (vendorsRes.data?.pagination) {
+        setVendorPagination({
+          totalPages: vendorsRes.data.pagination.totalPages,
+          hasNext: vendorsRes.data.pagination.hasNext,
+          hasPrev: vendorsRes.data.pagination.hasPrev,
+        });
+      }
+      if (companiesRes.data?.pagination) {
+        setCompanyPagination({
+          totalPages: companiesRes.data.pagination.totalPages,
+          hasNext: companiesRes.data.pagination.hasNext,
+          hasPrev: companiesRes.data.pagination.hasPrev,
+        });
+      }
+      if (employeesRes.data?.pagination) {
+        setEmployeePagination({
+          totalPages: employeesRes.data.pagination.totalPages,
+          hasNext: employeesRes.data.pagination.hasNext,
+          hasPrev: employeesRes.data.pagination.hasPrev,
+        });
+      }
 
       // Process device data
       const processedDevices: DeviceData[] = devices.map((device: any) => ({
         _id: device._id,
         deviceId: device.deviceId || device._id,
-        brand: device.brand,
-        model: device.model,
-        imei1: device.imei1,
+        brand: device.brand || "N/A",
+        model: device.model || "N/A",
+        imei1: device.imei1 || "N/A",
         imei2: device.imei2,
-        initialCost: device.initialCost,
-        cost: device.cost,
-        credit: device.credit,
+        initialCost: device.initialCost || device.cost || 0,
+        cost: device.cost || 0,
+        credit: device.credit || 0,
         selling: device.selling,
-        profit: device.profit,
         soldTo: device.soldTo,
         pickedBy: device.pickedBy,
-        warranty: device.warranty,
-        issues: device.issues,
-        createdAt: device.createdAt
+        companyIds: device.companyIds,
+        selectedCompanyIds: device.selectedCompanyIds,
+        sellHistory: device.sellHistory,
+        warranty: device.warranty || "N/A",
+        issues: device.issues || "N/A",
+        createdAt: device.createdAt,
+        status: getDeviceStatus(device),
+        profit: device.profit,
       }));
 
       // Process transaction data
@@ -219,29 +312,217 @@ export default function ReportsPage() {
         type: txn.type,
         amount: txn.amount,
         vendor: txn.vendorId?.name || "N/A",
-        device: txn.deviceId?.model || txn.deviceId?.name || "N/A",
+        device: txn.deviceId?.model || txn.deviceId?.deviceId || "N/A",
         paymentMode: txn.paymentMode || "N/A",
         note: txn.note || "",
         author: txn.author?.authorId?.name || "N/A",
-        createdAt: txn.createdAt
+        createdAt: txn.createdAt,
       }));
 
-      // Generate vendor reports
-      const vendorReportsData = generateVendorReports(transactions, devices);
+      // Generate reports for all data
+      const vendorReportsData = generateVendorReports(transactions, devices, vendorsData);
+      const companyReportsData = generateCompanyReports(devices, companiesData);
+      const employeeReportsData = generateEmployeeReports(devices, employeesData);
 
-      // Generate company reports
-      const companyReportsData = generateCompanyReports(devices);
-
-      console.log("Generated vendor reports:", vendorReportsData?.length || 0);
-      console.log("Generated company reports:", companyReportsData?.length || 0);
-
-      setProfitData(profits);
       setDeviceData(processedDevices);
       setTransactionData(processedTransactions);
       setVendorReports(vendorReportsData);
       setCompanyReports(companyReportsData);
+      setEmployeeReports(employeeReportsData);
+    } catch (error) {
+      console.error("Error loading all data:", error);
+      toast.error("Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      toast.success("Reports generated successfully");
+  const fetchReportsData = async () => {
+    // Only require dates if any filter is applied
+    const hasFilters = filters.vendorId || filters.companyId || filters.employeeId;
+    if (hasFilters && (!filters.startDate || !filters.endDate)) {
+      toast.error("Please select both start and end dates when using filters");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Build filter params with pagination
+      const deviceFilters: any = {
+        page: devicePage,
+        filter: {},
+      };
+
+      const transactionFilters: any = {
+        page: transactionPage,
+        filter: {},
+      };
+
+      // Apply date filters if provided
+      if (filters.startDate) {
+        deviceFilters.filter.startDate = filters.startDate;
+        transactionFilters.filter.startDate = filters.startDate;
+      }
+      if (filters.endDate) {
+        deviceFilters.filter.endDate = filters.endDate;
+        transactionFilters.filter.endDate = filters.endDate;
+      }
+
+      // Apply specific filters
+      if (filters.companyId) {
+        deviceFilters.filter.companyIds = filters.companyId;
+      }
+      if (filters.vendorId) {
+        transactionFilters.filter.vendorId = filters.vendorId;
+        deviceFilters.filter.vendorId = filters.vendorId;
+      }
+      if (filters.employeeId) {
+        deviceFilters.filter.pickedBy = filters.employeeId;
+      }
+
+      // Build filter params for other tables - get all data to filter on frontend
+      const vendorFilters: any = {
+        page: vendorPage,
+        limit: 0, // Get all vendors to filter on frontend
+      };
+      const companyFilters: any = {
+        page: companyPage,
+        limit: 0, // Get all companies to filter on frontend
+      };
+      const employeeFilters: any = {
+        page: employeePage,
+        limit: 0, // Get all employees to filter on frontend
+      };
+
+      // Fetch data with filters and pagination
+      const [devicesRes, transactionsRes, vendorsRes, companiesRes, employeesRes] = await Promise.all([
+        getAllDevices(deviceFilters),
+        getAllTransactions(transactionFilters),
+        getAllVendors(vendorFilters),
+        getAllCompanies(companyFilters),
+        getAllEmployees(employeeFilters),
+      ]);
+
+      const devices = devicesRes.data?.devices || [];
+      const transactions = transactionsRes.data?.transactions || [];
+      let vendorsData = vendorsRes.data?.vendors || vendorsRes.vendors || vendorsRes.data || [];
+      let companiesData = companiesRes.data?.companies || companiesRes.companies || companiesRes.data || [];
+      let employeesData = employeesRes.data?.employees || employeesRes.employees || employeesRes.data || [];
+      
+      // Filter data on frontend if specific items are selected
+      if (filters.vendorId) {
+        vendorsData = vendorsData.filter((vendor: any) => vendor._id === filters.vendorId);
+      }
+      if (filters.companyId) {
+        companiesData = companiesData.filter((company: any) => company._id === filters.companyId);
+      }
+      if (filters.employeeId) {
+        employeesData = employeesData.filter((employee: any) => employee._id === filters.employeeId);
+      }
+
+      // Set pagination info
+      if (devicesRes.data?.pagination) {
+        setDevicePagination({
+          totalPages: devicesRes.data.pagination.totalPages,
+          hasNext: devicesRes.data.pagination.hasNext,
+          hasPrev: devicesRes.data.pagination.hasPrev,
+        });
+      }
+      if (transactionsRes.data?.pagination) {
+        setTransactionPagination({
+          totalPages: transactionsRes.data.pagination.totalPages,
+          hasNext: transactionsRes.data.pagination.hasNext,
+          hasPrev: transactionsRes.data.pagination.hasPrev,
+        });
+      }
+      if (vendorsRes.data?.pagination) {
+        setVendorPagination({
+          totalPages: vendorsRes.data.pagination.totalPages,
+          hasNext: vendorsRes.data.pagination.hasNext,
+          hasPrev: vendorsRes.data.pagination.hasPrev,
+        });
+      }
+      if (companiesRes.data?.pagination) {
+        setCompanyPagination({
+          totalPages: companiesRes.data.pagination.totalPages,
+          hasNext: companiesRes.data.pagination.hasNext,
+          hasPrev: companiesRes.data.pagination.hasPrev,
+        });
+      }
+      if (employeesRes.data?.pagination) {
+        setEmployeePagination({
+          totalPages: employeesRes.data.pagination.totalPages,
+          hasNext: employeesRes.data.pagination.hasNext,
+          hasPrev: employeesRes.data.pagination.hasPrev,
+        });
+      }
+
+      // Process device data with proper structure
+      const processedDevices: DeviceData[] = devices.map((device: any) => ({
+        _id: device._id,
+        deviceId: device.deviceId || device._id,
+        brand: device.brand || "N/A",
+        model: device.model || "N/A",
+        imei1: device.imei1 || "N/A",
+        imei2: device.imei2,
+        initialCost: device.initialCost || device.cost || 0,
+        cost: device.cost || 0,
+        credit: device.credit || 0,
+        selling: device.selling,
+        soldTo: device.soldTo,
+        pickedBy: device.pickedBy,
+        companyIds: device.companyIds,
+        selectedCompanyIds: device.selectedCompanyIds,
+        sellHistory: device.sellHistory,
+        warranty: device.warranty || "N/A",
+        issues: device.issues || "N/A",
+        createdAt: device.createdAt,
+        status: getDeviceStatus(device),
+        profit: device.profit,
+      }));
+
+      // Process transaction data - filter by vendor if selected
+      let filteredTransactions = transactions;
+      if (filters.vendorId) {
+        filteredTransactions = transactions.filter((txn: any) => {
+          const vendorId =
+            typeof txn.vendorId === "string" ? txn.vendorId : txn.vendorId?._id;
+          return vendorId === filters.vendorId;
+        });
+      }
+
+      const processedTransactions: TransactionData[] = filteredTransactions.map(
+        (txn: any) => ({
+          _id: txn._id,
+          type: txn.type,
+          amount: txn.amount,
+          vendor: txn.vendorId?.name || "N/A",
+          device: txn.deviceId?.model || txn.deviceId?.deviceId || "N/A",
+          paymentMode: txn.paymentMode || "N/A",
+          note: txn.note || "",
+          author: txn.author?.authorId?.name || "N/A",
+          createdAt: txn.createdAt,
+        })
+      );
+
+      // Generate reports
+      const vendorReportsData = generateVendorReports(
+        filteredTransactions,
+        devices,
+        vendorsData
+      );
+      const companyReportsData = generateCompanyReports(devices, companiesData);
+      const employeeReportsData = generateEmployeeReports(devices, employeesData);
+
+      setDeviceData(processedDevices);
+      setTransactionData(processedTransactions);
+      setVendorReports(vendorReportsData);
+      setCompanyReports(companyReportsData);
+      setEmployeeReports(employeeReportsData);
+
+      if (processedDevices.length > 0 || processedTransactions.length > 0) {
+        toast.success("Reports generated successfully");
+      }
     } catch (error) {
       console.error("Error fetching reports data:", error);
       toast.error("Failed to generate reports");
@@ -250,17 +531,90 @@ export default function ReportsPage() {
     }
   };
 
-  const generateVendorReports = (transactions: any[], devices: any[]): VendorReportData[] => {
+  // Helper function to determine device status
+  const getDeviceStatus = (device: any) => {
+    if (device.sellHistory && device.sellHistory.length > 0) {
+      const lastEntry = device.sellHistory[device.sellHistory.length - 1];
+      if (lastEntry.type === "return") return "Returned";
+      if (lastEntry.type === "sell") return "Sold";
+    }
+    return "Available";
+  };
+
+
+
+  const handleDevicePageChange = (page: number) => {
+    setDevicePage(page);
+  };
+  
+  const handleTransactionPageChange = (page: number) => {
+    setTransactionPage(page);
+  };
+  
+  const handleVendorPageChange = (page: number) => {
+    setVendorPage(page);
+  };
+  
+  const handleCompanyPageChange = (page: number) => {
+    setCompanyPage(page);
+  };
+  
+  const handleEmployeePageChange = (page: number) => {
+    setEmployeePage(page);
+  };
+
+  // Refetch data when page changes
+  useEffect(() => {
+    if (hasActiveFilters()) {
+      fetchReportsData();
+    } else {
+      loadAllData();
+    }
+  }, [devicePage, transactionPage, vendorPage, companyPage, employeePage]);
+
+  const clearAllFilters = () => {
+    setFilters({
+      startDate: "",
+      endDate: "",
+      vendorId: undefined,
+      companyId: undefined,
+      employeeId: undefined,
+    });
+    setDevicePage(1);
+    setTransactionPage(1);
+    setVendorPage(1);
+    setCompanyPage(1);
+    setEmployeePage(1);
+    // Load all data when filters are cleared
+    loadAllData();
+  };
+
+  const hasActiveFilters = () => {
+    return (
+      filters.startDate ||
+      filters.endDate ||
+      filters.vendorId ||
+      filters.companyId ||
+      filters.employeeId
+    );
+  };
+
+  const generateVendorReports = (
+    transactions: any[],
+    devices: any[],
+    vendorsData: any[]
+  ): VendorReportData[] => {
     const vendorMap = new Map();
 
-    // Process transactions
-    transactions.forEach(txn => {
+    transactions.forEach((txn) => {
       if (!txn.vendorId) return;
 
-      const vendorId = typeof txn.vendorId === 'string' ? txn.vendorId : txn.vendorId._id;
-      const vendorName = typeof txn.vendorId === 'string' ?
-        vendors.find(v => v._id === txn.vendorId)?.name || 'Unknown' :
-        txn.vendorId.name;
+      const vendorId =
+        typeof txn.vendorId === "string" ? txn.vendorId : txn.vendorId._id;
+      const vendorName =
+        typeof txn.vendorId === "string"
+          ? vendors.find((v) => v._id === txn.vendorId)?.name || "Unknown"
+          : txn.vendorId.name;
 
       if (!vendorMap.has(vendorId)) {
         vendorMap.set(vendorId, {
@@ -271,7 +625,7 @@ export default function ReportsPage() {
           totalSales: 0,
           totalReturns: 0,
           devicesSold: 0,
-          lastTransactionDate: txn.createdAt
+          lastTransactionDate: txn.createdAt,
         });
       }
 
@@ -291,242 +645,751 @@ export default function ReportsPage() {
       }
     });
 
-    // Add vendors that have no transactions in the date range
-    vendors.forEach(vendor => {
-      if (!vendorMap.has(vendor._id)) {
-        vendorMap.set(vendor._id, {
-          vendorId: vendor._id,
-          vendorName: vendor.name,
-          totalTransactions: 0,
-          totalAmount: 0,
-          totalSales: 0,
-          totalReturns: 0,
-          devicesSold: 0,
-          lastTransactionDate: new Date().toISOString()
-        });
-      }
+    // Use filtered vendors data - only show vendors that have transactions or the selected vendor
+    return vendorsData.map((vendor) => {
+      const vendorTransactions = transactions.filter((txn) => {
+        const vendorId = typeof txn.vendorId === "string" ? txn.vendorId : txn.vendorId?._id;
+        return vendorId === vendor._id;
+      });
+      
+      const totalTransactions = vendorTransactions.length;
+      const totalSales = vendorTransactions.filter(txn => txn.type === "sell").reduce((sum, txn) => sum + txn.amount, 0);
+      const totalReturns = vendorTransactions.filter(txn => txn.type === "return").reduce((sum, txn) => sum + txn.amount, 0);
+      const devicesSold = vendorTransactions.filter(txn => txn.type === "sell").length;
+      const lastTransaction = vendorTransactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      
+      return {
+        vendorId: vendor._id,
+        vendorName: vendor.name,
+        totalTransactions,
+        totalAmount: totalSales + totalReturns,
+        totalSales,
+        totalReturns,
+        devicesSold,
+        lastTransactionDate: lastTransaction?.createdAt || new Date().toISOString(),
+      };
     });
-
-    return Array.from(vendorMap.values());
   };
 
-  const generateCompanyReports = (devices: any[]): CompanyReportData[] => {
-    const companyMap = new Map();
+  const generateCompanyReports = (devices: any[], companiesData: any[]): CompanyReportData[] => {
+    console.log("Companies available:", companiesData);
+    console.log("Devices for company calculation:", devices);
 
-    devices.forEach(device => {
-      const companyId = device.selectedCompanyIds || device.companyIds || "Unknown";
-      const companyName = companies.find(c => c._id === companyId)?.name || companyId;
+    // Use paginated companies data
+    const companiesToShow = companiesData;
 
-      if (!companyMap.has(companyId)) {
-        companyMap.set(companyId, {
-          companyId,
-          companyName,
-          totalDevices: 0,
-          soldDevices: 0,
-          availableDevices: 0,
-          totalValue: 0,
-          totalProfit: 0
-        });
-      }
+    const companyReports = companiesToShow.map((company) => {
+      // Calculate device statistics for this company
+      console.log(`Checking devices for company: ${company.name} (${company._id})`);
+      
+      const companyDevices = devices.filter((device) => {
+        const deviceCompanyIds = device.selectedCompanyIds || device.companyIds;
+        
+        // Debug: log first few devices to see structure
+        if (devices.indexOf(device) < 3) {
+          console.log('Device structure:', {
+            deviceId: device.deviceId,
+            selectedCompanyIds: device.selectedCompanyIds,
+            companyIds: device.companyIds
+          });
+        }
+        
+        if (!deviceCompanyIds) return false;
+        
+        // Check if device has this company's _id in its companyIds field
+        if (typeof deviceCompanyIds === 'string') {
+          return deviceCompanyIds === company._id;
+        }
+        if (Array.isArray(deviceCompanyIds)) {
+          return deviceCompanyIds.includes(company._id);
+        }
+        return false;
+      });
+      
+      console.log(`Found ${companyDevices.length} devices for company ${company.name}`);
 
-      const company = companyMap.get(companyId);
-      company.totalDevices++;
-      company.totalValue += device.cost || 0;
+      const soldDevices = companyDevices.filter(
+        (device) => device.selling
+      ).length;
+      const availableDevices = companyDevices.length - soldDevices;
+      const totalValue = companyDevices.reduce(
+        (sum, device) => sum + (device.cost || 0),
+        0
+      );
 
-      if (device.selling) {
-        company.soldDevices++;
-        company.totalProfit += device.profit || 0;
-      } else {
-        company.availableDevices++;
-      }
+      return {
+        companyId: company._id,
+        companyName: company.name,
+        totalDevices: companyDevices.length,
+        soldDevices,
+        availableDevices,
+        totalValue,
+        creditValue: company.creditValue,
+        isActive: company.isActive,
+        companyIds: company.companyIds || []
+      };
     });
 
-    // Add companies that have no devices in the date range
-    companies.forEach(company => {
-      if (!companyMap.has(company._id)) {
-        companyMap.set(company._id, {
-          companyId: company._id,
-          companyName: company.name,
-          totalDevices: 0,
-          soldDevices: 0,
-          availableDevices: 0,
-          totalValue: 0,
-          totalProfit: 0
-        });
-      }
-    });
-
-    return Array.from(companyMap.values());
+    console.log("Final company reports:", companyReports);
+    return companyReports;
   };
 
-  const exportToExcel = (data: any[], filename: string, sheetName: string) => {
+  const generateEmployeeReports = (devices: any[], employeesData: any[]): EmployeeReportData[] => {
+    // Use paginated employees data
+    const employeesToShow = employeesData;
+
+    const employeeReports = employeesToShow.map((employee) => {
+      // Calculate device statistics for this employee
+      const employeeDevices = devices.filter((device) => {
+        const pickedBy = device.pickedBy;
+        if (typeof pickedBy === 'string') {
+          return pickedBy === employee._id;
+        }
+        if (typeof pickedBy === 'object' && pickedBy?._id) {
+          return pickedBy._id === employee._id;
+        }
+        return false;
+      });
+
+      const soldDevices = employeeDevices.filter(
+        (device) => device.selling
+      ).length;
+      const totalSalesValue = employeeDevices.reduce(
+        (sum, device) => sum + (device.selling || 0),
+        0
+      );
+      const lastActivity = employeeDevices.length > 0 
+        ? employeeDevices.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].createdAt
+        : new Date().toISOString();
+
+      return {
+        employeeId: employee._id,
+        employeeName: employee.name,
+        email: employee.email,
+        phone: employee.phone,
+        salaryPerDay: employee.salaryPerDay,
+        isActive: employee.isActive,
+        totalDevicesHandled: employeeDevices.length,
+        soldDevices,
+        availableDevices: employeeDevices.length - soldDevices,
+        totalSalesValue,
+        lastActivity,
+      };
+    });
+
+    return employeeReports;
+  };
+
+  // Fetch all data for export (without pagination)
+  const fetchAllDataForExport = async () => {
+    if (!filters.startDate || !filters.endDate) {
+      toast.error("Please select both start and end dates to export data");
+      return null;
+    }
+
     try {
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      // Build filter params without pagination limits
+      const deviceFilters: any = {
+        limit: 0, // Get all data
+        filter: {},
+      };
 
-      const dateRange = filters.startDate && filters.endDate
-        ? `_${filters.startDate}_to_${filters.endDate}`
-        : `_${format(new Date(), 'yyyy-MM-dd')}`;
+      const transactionFilters: any = {
+        limit: 0, // Get all data
+        filter: {},
+      };
 
-      XLSX.writeFile(wb, `${filename}${dateRange}.xlsx`);
-      toast.success(`${sheetName} exported successfully`);
+      // Apply date filters
+      if (filters.startDate) {
+        deviceFilters.filter.startDate = filters.startDate;
+        transactionFilters.filter.startDate = filters.startDate;
+      }
+      if (filters.endDate) {
+        deviceFilters.filter.endDate = filters.endDate;
+        transactionFilters.filter.endDate = filters.endDate;
+      }
+
+      // Apply specific filters
+      if (filters.companyId) {
+        deviceFilters.filter.companyIds = filters.companyId;
+      }
+      if (filters.vendorId) {
+        transactionFilters.filter.vendorId = filters.vendorId;
+        deviceFilters.filter.vendorId = filters.vendorId;
+      }
+      if (filters.employeeId) {
+        deviceFilters.filter.pickedBy = filters.employeeId;
+      }
+
+      // Fetch all data
+      const [devicesRes, transactionsRes, vendorsRes, companiesRes, employeesRes] = await Promise.all([
+        getAllDevices(deviceFilters),
+        getAllTransactions(transactionFilters),
+        getAllVendors({ limit: 0 }),
+        getAllCompanies({ limit: 0 }),
+        getAllEmployees({ limit: 0 }),
+      ]);
+
+      const devices = devicesRes.data?.devices || [];
+      const transactions = transactionsRes.data?.transactions || [];
+      let vendorsData = vendorsRes.data?.vendors || vendorsRes.vendors || vendorsRes.data || [];
+      let companiesData = companiesRes.data?.companies || companiesRes.companies || companiesRes.data || [];
+      let employeesData = employeesRes.data?.employees || employeesRes.employees || employeesRes.data || [];
+      
+      // Filter data on frontend if specific items are selected
+      if (filters.vendorId) {
+        vendorsData = vendorsData.filter((vendor: any) => vendor._id === filters.vendorId);
+      }
+      if (filters.companyId) {
+        companiesData = companiesData.filter((company: any) => company._id === filters.companyId);
+      }
+      if (filters.employeeId) {
+        employeesData = employeesData.filter((employee: any) => employee._id === filters.employeeId);
+      }
+
+      // Process data
+      const processedDevices: DeviceData[] = devices.map((device: any) => ({
+        _id: device._id,
+        deviceId: device.deviceId || device._id,
+        brand: device.brand || "N/A",
+        model: device.model || "N/A",
+        imei1: device.imei1 || "N/A",
+        imei2: device.imei2,
+        initialCost: device.initialCost || device.cost || 0,
+        cost: device.cost || 0,
+        credit: device.credit || 0,
+        selling: device.selling,
+        soldTo: device.soldTo,
+        pickedBy: device.pickedBy,
+        companyIds: device.companyIds,
+        selectedCompanyIds: device.selectedCompanyIds,
+        sellHistory: device.sellHistory,
+        warranty: device.warranty || "N/A",
+        issues: device.issues || "N/A",
+        createdAt: device.createdAt,
+        status: getDeviceStatus(device),
+        profit: device.profit,
+      }));
+
+      // Filter transactions by vendor if selected
+      let filteredTransactions = transactions;
+      if (filters.vendorId) {
+        filteredTransactions = transactions.filter((txn: any) => {
+          const vendorId = typeof txn.vendorId === "string" ? txn.vendorId : txn.vendorId?._id;
+          return vendorId === filters.vendorId;
+        });
+      }
+
+      const processedTransactions: TransactionData[] = filteredTransactions.map((txn: any) => ({
+        _id: txn._id,
+        type: txn.type,
+        amount: txn.amount,
+        vendor: txn.vendorId?.name || "N/A",
+        device: txn.deviceId?.model || txn.deviceId?.deviceId || "N/A",
+        paymentMode: txn.paymentMode || "N/A",
+        note: txn.note || "",
+        author: txn.author?.authorId?.name || "N/A",
+        createdAt: txn.createdAt,
+      }));
+
+      // Generate reports
+      const vendorReportsData = generateVendorReports(filteredTransactions, devices, vendorsData);
+      const companyReportsData = generateCompanyReports(devices, companiesData);
+      const employeeReportsData = generateEmployeeReports(devices, employeesData);
+
+      return {
+        devices: processedDevices,
+        transactions: processedTransactions,
+        vendors: vendorReportsData,
+        companies: companyReportsData,
+        employees: employeeReportsData,
+      };
     } catch (error) {
-      console.error("Export error:", error);
-      toast.error("Failed to export data");
+      console.error("Error fetching export data:", error);
+      toast.error("Failed to fetch data for export");
+      return null;
     }
   };
 
-  // Table columns
-  const profitColumns: ColumnDef<ProfitData>[] = [
-    { accessorKey: "deviceId", header: "Device ID" },
-    { accessorKey: "deviceBrand", header: "Brand" },
-    { accessorKey: "deviceModel", header: "Model" },
-    {
-      accessorKey: "initialCost",
-      header: "Initial Cost",
-      cell: ({ row }) => `₹${row.original.initialCost.toLocaleString()}`
-    },
-    {
-      accessorKey: "sellingPrice",
-      header: "Selling Price",
-      cell: ({ row }) => `₹${row.original.sellingPrice.toLocaleString()}`
-    },
-    {
-      accessorKey: "profit",
-      header: "Profit",
-      cell: ({ row }) => (
-        <span className={row.original.profit >= 0 ? "text-green-600" : "text-red-600"}>
-          ₹{row.original.profit.toLocaleString()}
-        </span>
-      )
-    },
-    { accessorKey: "vendor", header: "Vendor" },
-    { accessorKey: "company", header: "Company" },
-    {
-      accessorKey: "soldDate",
-      header: "Sold Date",
-      cell: ({ row }) => format(new Date(row.original.soldDate), "MMM dd, yyyy")
-    }
-  ];
+  const exportToExcel = (data: any[], filename: string) => {
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    XLSX.writeFile(wb, `${filename}_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+  };
 
+  const exportVendorData = async () => {
+    const allData = await fetchAllDataForExport();
+    if (!allData) return;
+
+    const exportData = allData.vendors.map((vendor, index) => ({
+      "SL": index + 1,
+      "Vendor Name": vendor.vendorName,
+      "Amount": vendors.find(v => v._id === vendor.vendorId)?.amount || 0,
+      "Total Transactions": vendor.totalTransactions,
+      "Total Returns": vendor.totalReturns,
+      "Devices Sold": vendor.devicesSold,
+      "Last Transaction": format(new Date(vendor.lastTransactionDate), "dd/MM/yyyy"),
+      "Status": vendors.find(v => v._id === vendor.vendorId)?.isActive ? "Active" : "Inactive"
+    }));
+    exportToExcel(exportData, "vendors_report");
+    toast.success(`Exported ${exportData.length} vendor records`);
+  };
+
+  const exportCompanyData = async () => {
+    const allData = await fetchAllDataForExport();
+    if (!allData) return;
+
+    const exportData = allData.companies.map((company, index) => ({
+      "SL": index + 1,
+      "Name": company.companyName,
+      "Credit Value": company.creditValue || 0,
+      "Company Ids": Array.isArray(company.companyIds) ? company.companyIds.join(", ") : company.companyIds || "N/A",
+      "Status": company.isActive ? "Active" : "Inactive"
+    }));
+    exportToExcel(exportData, "companies_report");
+    toast.success(`Exported ${exportData.length} company records`);
+  };
+
+  const exportEmployeeData = async () => {
+    const allData = await fetchAllDataForExport();
+    if (!allData) return;
+
+    const exportData = allData.employees.map((employee, index) => ({
+      "SL": index + 1,
+      "Name": employee.employeeName,
+      "Email": employee.email,
+      "Phone": employee.phone,
+      "Salary/Day": employee.salaryPerDay,
+      "Active": employee.isActive ? "Active" : "Inactive"
+    }));
+    exportToExcel(exportData, "employees_report");
+    toast.success(`Exported ${exportData.length} employee records`);
+  };
+
+  const exportDeviceData = async () => {
+    const allData = await fetchAllDataForExport();
+    if (!allData) return;
+
+    const exportData = allData.devices.map((device, index) => {
+      const sellHistory = device.sellHistory;
+      const lastSell = sellHistory?.find((h) => h.type === "sell");
+      const company = device.companyIds as any;
+      const pickedBy = device.pickedBy as any;
+      const returnCount = sellHistory?.filter((h: any) => h.type === "return").length || 0;
+      const profit = device.profit;
+      
+      return {
+        "SL": index + 1,
+        "Device ID": device.deviceId,
+        "Company ID": device.selectedCompanyIds,
+        "Brand": device.brand,
+        "Model": device.model,
+        "Sold To": lastSell?.vendor?.name || "-",
+        "Company": company?.name || company || "-",
+        "Picked By": pickedBy?.name || pickedBy || "-",
+        "Selling Amount": lastSell?.selling || lastSell?.amount || "-",
+        "Profit/Loss": profit !== undefined && profit !== null ? (profit >= 0 ? `+${profit}` : profit) : "-",
+        "Return Count": returnCount
+      };
+    });
+    exportToExcel(exportData, "devices_report");
+    toast.success(`Exported ${exportData.length} device records`);
+  };
+
+  const exportTransactionData = async () => {
+    const allData = await fetchAllDataForExport();
+    if (!allData) return;
+
+    const exportData = allData.transactions.map((transaction, index) => ({
+      "SL": index + 1,
+      "Type": transaction.type,
+      "Amount": `₹${transaction.amount}`,
+      "Vendor": transaction.vendor,
+      "Device": transaction.device,
+      "Payment Mode": transaction.paymentMode,
+      "Note": transaction.note || "N/A",
+      "Author": transaction.author,
+      "Date": format(new Date(transaction.createdAt), "dd/MM/yyyy")
+    }));
+    exportToExcel(exportData, "transactions_report");
+    toast.success(`Exported ${exportData.length} transaction records`);
+  };
+
+  // Column definitions
   const deviceColumns: ColumnDef<DeviceData>[] = [
-    { accessorKey: "deviceId", header: "Device ID" },
-    { accessorKey: "brand", header: "Brand" },
-    { accessorKey: "model", header: "Model" },
-    { accessorKey: "imei1", header: "IMEI 1" },
     {
-      accessorKey: "initialCost",
-      header: "Initial Cost",
-      cell: ({ row }) => `₹${row.original.initialCost.toLocaleString()}`
+      accessorKey: "_id",
+      header: "SL",
+      cell: ({ row }) => (devicePage - 1) * 10 + row.index + 1,
     },
     {
-      accessorKey: "selling",
-      header: "Selling Price",
-      cell: ({ row }) => row.original.selling ? `₹${row.original.selling.toLocaleString()}` : "Not Sold"
+      accessorKey: "deviceId",
+      header: "Device ID",
+    },
+    {
+      accessorKey: "selectedCompanyIds",
+      header: "Company ID",
+    },
+    {
+      accessorKey: "brand",
+      header: "Brand",
+    },
+    {
+      accessorKey: "model",
+      header: "Model",
+    },
+    {
+      accessorKey: "sellHistory",
+      header: "Sold To",
+      cell: ({ row }) => {
+        const sellHistory = row.original.sellHistory;
+        const lastSell = sellHistory?.find((h) => h.type === "sell");
+        return lastSell?.vendor?.name || "-";
+      },
+    },
+    {
+      accessorKey: "companyIds",
+      header: "Company",
+      cell: ({ row }) => {
+        const company = row.original.companyIds as any;
+        return company?.name || company || "-";
+      },
+    },
+    {
+      accessorKey: "pickedBy",
+      header: "Picked By",
+      cell: ({ row }) => {
+        const pickedBy = row.original.pickedBy as any;
+        return pickedBy?.name || pickedBy || "-";
+      },
+    },
+    {
+      accessorKey: "sellHistory",
+      header: "Selling Amount",
+      cell: ({ row }: { row: any }) => {
+        const sellHistory = row.original.sellHistory;
+        const lastSell = sellHistory?.find((h: any) => h.type === "sell");
+        return lastSell?.selling || lastSell?.amount || "-";
+      },
     },
     {
       accessorKey: "profit",
-      header: "Profit",
-      cell: ({ row }) => row.original.profit ? (
-        <span className={row.original.profit >= 0 ? "text-green-600" : "text-red-600"}>
-          ₹{row.original.profit.toLocaleString()}
-        </span>
-      ) : "N/A"
+      header: "Profit/Loss",
+      cell: ({ row }: { row: any }) => {
+        const profit = row.original.profit;
+        if (profit === undefined || profit === null) return "-";
+        const isProfit = profit >= 0;
+        return (
+          <span
+            className={
+              isProfit
+                ? "text-green-600 font-medium"
+                : "text-red-600 font-medium"
+            }
+          >
+            {isProfit ? "+" : ""}
+            {profit}
+          </span>
+        );
+      },
     },
-    { accessorKey: "pickedBy", header: "Picked By" },
-    { accessorKey: "warranty", header: "Warranty" }
+    {
+      accessorKey: "sellHistory",
+      header: "Return Count",
+      cell: ({ row }) => {
+        const sellHistory = row.original.sellHistory;
+        const returnCount =
+          sellHistory?.filter((h: any) => h.type === "return").length || 0;
+        return (
+          <span
+            className={
+              returnCount > 3 ? "text-red-600 font-bold" : "text-gray-900"
+            }
+          >
+            {returnCount}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <div className="flex gap-2">
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => router.push(`/device/${row.original._id}`)}
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   const transactionColumns: ColumnDef<TransactionData>[] = [
     {
+      accessorKey: "_id",
+      header: "SL",
+      cell: ({ row }) => (transactionPage - 1) * 10 + row.index + 1,
+    },
+    {
       accessorKey: "type",
       header: "Type",
-      cell: ({ row }) => (
-        <Badge variant={row.original.type === "sell" ? "default" : "destructive"}>
-          {row.original.type.toUpperCase()}
-        </Badge>
-      )
+      cell: ({ row }) => {
+        const type = row.getValue("type") as string;
+        const variant =
+          type === "sell"
+            ? "default"
+            : type === "return"
+              ? "destructive"
+              : "secondary";
+        return <Badge variant={variant}>{type}</Badge>;
+      },
     },
     {
       accessorKey: "amount",
       header: "Amount",
-      cell: ({ row }) => (
-        <span className={row.original.type === "sell" ? "text-green-600" : "text-red-600"}>
-          {row.original.type === "sell" ? "+" : "-"}₹{row.original.amount.toLocaleString()}
-        </span>
-      )
+      cell: ({ row }) => `₹${row.getValue("amount")}`,
     },
     { accessorKey: "vendor", header: "Vendor" },
     { accessorKey: "device", header: "Device" },
     { accessorKey: "paymentMode", header: "Payment Mode" },
-    { accessorKey: "author", header: "Created By" },
+    {
+      accessorKey: "note",
+      header: "Note",
+      cell: ({ row }) => {
+        const note = row.getValue("note") as string;
+        return note || "N/A";
+      },
+    },
+    { accessorKey: "author", header: "Author" },
     {
       accessorKey: "createdAt",
       header: "Date",
-      cell: ({ row }) => format(new Date(row.original.createdAt), "MMM dd, yyyy HH:mm")
-    }
+      cell: ({ row }) =>
+        format(new Date(row.getValue("createdAt")), "dd/MM/yyyy"),
+    },
   ];
 
-  const vendorReportColumns: ColumnDef<VendorReportData>[] = [
-    { accessorKey: "vendorName", header: "Vendor Name" },
-    { accessorKey: "totalTransactions", header: "Total Transactions" },
+  const vendorColumns: ColumnDef<VendorReportData>[] = [
     {
-      accessorKey: "totalAmount",
-      header: "Total Amount",
-      cell: ({ row }) => `₹${row.original.totalAmount.toLocaleString()}`
+      accessorKey: "vendorId",
+      header: "SL",
+      cell: ({ row }) => (vendorPage - 1) * 10 + row.index + 1,
     },
     {
-      accessorKey: "totalSales",
-      header: "Total Sales",
-      cell: ({ row }) => `₹${row.original.totalSales.toLocaleString()}`
+      accessorKey: "vendorName",
+      header: "Vendor Name",
+      cell: ({ row }) => {
+        const vendorName = row.getValue("vendorName") as string;
+        return <div className="font-medium">{vendorName}</div>;
+      },
+    },
+    {
+      accessorKey: "vendorAmount",
+      header: "Amount",
+      cell: ({ row }) => {
+        const vendorId = row.original.vendorId;
+        const vendor = vendors.find((v) => v._id === vendorId);
+        return `₹${vendor?.amount || 0}`;
+      },
+    },
+    {
+      accessorKey: "totalTransactions",
+      header: "Total Transactions",
+      cell: ({ row }) => {
+        const count = row.getValue("totalTransactions") as number;
+        return <Badge variant="outline">{count}</Badge>;
+      },
     },
     {
       accessorKey: "totalReturns",
       header: "Total Returns",
-      cell: ({ row }) => `₹${row.original.totalReturns.toLocaleString()}`
+      cell: ({ row }) => {
+        const returns = row.getValue("totalReturns") as number;
+        return <span className="font-medium text-red-600">₹{returns}</span>;
+      },
     },
-    { accessorKey: "devicesSold", header: "Devices Sold" },
+    {
+      accessorKey: "devicesSold",
+      header: "Devices Sold",
+      cell: ({ row }) => {
+        const count = row.getValue("devicesSold") as number;
+        return <Badge variant="secondary">{count}</Badge>;
+      },
+    },
     {
       accessorKey: "lastTransactionDate",
       header: "Last Transaction",
-      cell: ({ row }) => format(new Date(row.original.lastTransactionDate), "MMM dd, yyyy")
-    }
-  ];
-
-  const companyReportColumns: ColumnDef<CompanyReportData>[] = [
-    { accessorKey: "companyName", header: "Company" },
-    { accessorKey: "totalDevices", header: "Total Devices" },
-    { accessorKey: "soldDevices", header: "Sold Devices" },
-    { accessorKey: "availableDevices", header: "Available Devices" },
-    {
-      accessorKey: "totalValue",
-      header: "Total Value",
-      cell: ({ row }) => `₹${row.original.totalValue.toLocaleString()}`
+      cell: ({ row }) => {
+        const date = row.getValue("lastTransactionDate") as string;
+        return format(new Date(date), "dd/MM/yyyy");
+      },
     },
     {
-      accessorKey: "totalProfit",
-      header: "Total Profit",
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const vendorId = row.original.vendorId;
+        const vendor = vendors.find((v) => v._id === vendorId);
+        return (
+          <Badge variant={vendor?.isActive ? "default" : "secondary"}>
+            {vendor?.isActive ? "Active" : "Inactive"}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "actions",
+      header: "Actions",
       cell: ({ row }) => (
-        <span className={row.original.totalProfit >= 0 ? "text-green-600" : "text-red-600"}>
-          ₹{row.original.totalProfit.toLocaleString()}
-        </span>
-      )
-    }
+        <Button
+          size="icon"
+          variant="outline"
+          onClick={() => router.push(`/vendor/${row.original.vendorId}`)}
+        >
+          <Eye className="w-4 h-4" />
+        </Button>
+      ),
+    },
+  ];
+
+  const companyColumns: ColumnDef<CompanyReportData>[] = [
+    {
+      accessorKey: "companyId",
+      header: "SL",
+      cell: ({ row }) => (companyPage - 1) * 10 + row.index + 1,
+    },
+    {
+      accessorKey: "companyName",
+      header: "Name",
+      cell: ({ row }) => {
+        const companyName = row.getValue("companyName") as string;
+        return <div className="font-medium">{companyName}</div>;
+      },
+    },
+    {
+      accessorKey: "creditValue",
+      header: "Credit Value",
+      cell: ({ row }) => {
+        const creditValue = row.original.creditValue;
+        return `₹${creditValue || 0}`;
+      },
+    },
+    {
+      accessorKey: "companyIds",
+      header: "Company Ids",
+      cell: ({ row }) => {
+        const companyIds = row.original.companyIds;
+        if (Array.isArray(companyIds)) {
+          return companyIds.join(", ");
+        }
+        return companyIds || "N/A";
+      },
+    },
+
+    {
+      accessorKey: "isActive",
+      header: "Status",
+      cell: ({ row }) => {
+        const isActive = row.original.isActive;
+        return (
+          <Badge variant={isActive ? "default" : "secondary"}>
+            {isActive ? "Active" : "Inactive"}
+          </Badge>
+        );
+      },
+    },
+  ];
+
+  const employeeColumns: ColumnDef<EmployeeReportData>[] = [
+    {
+      accessorKey: "employeeId",
+      header: "SL",
+      cell: ({ row }) => (employeePage - 1) * 10 + row.index + 1,
+    },
+    {
+      accessorKey: "employeeName",
+      header: "Name",
+      cell: ({ row }) => {
+        const employeeName = row.getValue("employeeName") as string;
+        return <div className="font-medium">{employeeName}</div>;
+      },
+    },
+    {
+      accessorKey: "email",
+      header: "Email",
+    },
+    {
+      accessorKey: "phone",
+      header: "Phone",
+    },
+    {
+      accessorKey: "salaryPerDay",
+      header: "Salary/Day",
+      cell: ({ row }) => `₹${row.original.salaryPerDay}`,
+    },
+    {
+      accessorKey: "isActive",
+      header: "Active",
+      cell: ({ row }) => (
+        <Badge variant={row.original.isActive ? "default" : "secondary"}>
+          {row.original.isActive ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <Button
+          size="icon"
+          variant="outline"
+          onClick={() => router.push(`/employee/${row.original.employeeId}/devices`)}
+          title="View Devices"
+        >
+          <Eye className="w-4 h-4" />
+        </Button>
+      ),
+    },
+  ];
+
+  // Prepare options for searchable selects
+  const vendorOptions: SearchableSelectOption[] = [
+    { value: "", label: "All Vendors" },
+    ...vendors.map((vendor) => ({ value: vendor._id, label: vendor.name })),
+  ];
+
+  const companyOptions: SearchableSelectOption[] = [
+    { value: "", label: "All Companies" },
+    ...companies.map((company) => ({
+      value: company._id,
+      label: company.name,
+    })),
+  ];
+
+  const employeeOptions: SearchableSelectOption[] = [
+    { value: "", label: "All Employees" },
+    ...employees.map((employee) => ({
+      value: employee._id,
+      label: employee.name,
+    })),
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Reports</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Reports Dashboard</h1>
+          <p className="text-muted-foreground">
+            Generate comprehensive reports for your business
+          </p>
+        </div>
         <div className="flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">
-            {filters.startDate && filters.endDate
-              ? `${filters.startDate} to ${filters.endDate}`
-              : "Select date range to generate reports"
-            }
-          </span>
+          <BarChart3 className="h-8 w-8 text-primary" />
         </div>
       </div>
 
@@ -541,11 +1404,15 @@ export default function ReportsPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">Start Date</label>
+              <label className="text-sm font-medium mb-2 block">
+                Start Date
+              </label>
               <Input
                 type="date"
                 value={filters.startDate}
-                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, startDate: e.target.value }))
+                }
               />
             </div>
             <div>
@@ -553,61 +1420,69 @@ export default function ReportsPage() {
               <Input
                 type="date"
                 value={filters.endDate}
-                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, endDate: e.target.value }))
+                }
               />
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">Vendor</label>
-              <Select
+              <SearchableSelect
+                options={vendorOptions}
                 value={filters.vendorId || ""}
-                onValueChange={(value) => setFilters(prev => ({
-                  ...prev,
-                  vendorId: value === "all" ? undefined : value
-                }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All Vendors" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Vendors</SelectItem>
-                  {vendors.map((vendor) => (
-                    <SelectItem key={vendor._id} value={vendor._id}>
-                      {vendor.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    vendorId: value || undefined,
+                  }))
+                }
+                placeholder="Select vendor..."
+              />
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">Company</label>
-              <Select
+              <SearchableSelect
+                options={companyOptions}
                 value={filters.companyId || ""}
-                onValueChange={(value) => setFilters(prev => ({
-                  ...prev,
-                  companyId: value === "all" ? undefined : value
-                }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All Companies" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Companies</SelectItem>
-                  {companies.map((company) => (
-                    <SelectItem key={company._id} value={company._id}>
-                      {company.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    companyId: value || undefined,
+                  }))
+                }
+                placeholder="Select company..."
+              />
             </div>
-            <div className="flex items-end">
-              <Button
-                onClick={fetchReportsData}
-                disabled={loading || !filters.startDate || !filters.endDate}
-                className="w-full gap-2"
+            <div>
+              <label className="text-sm font-medium mb-2 block">Employee</label>
+              <SearchableSelect
+                options={employeeOptions}
+                value={filters.employeeId || ""}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    employeeId: value || undefined,
+                  }))
+                }
+                placeholder="Select employee..."
+              />
+            </div>
+          </div>
+          <div className="flex justify-between items-center mt-4">
+            <div className="flex gap-2">
+              {hasActiveFilters() && (
+                <Button variant="outline" onClick={clearAllFilters}>
+                  <X className="w-4 h-4 mr-2" />
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={fetchReportsData} 
+                disabled={loading}
               >
-                <BarChart3 className="h-4 w-4" />
-                Generate Reports
+                {loading ? "Generating..." : "Generate Reports"}
               </Button>
             </div>
           </div>
@@ -615,12 +1490,8 @@ export default function ReportsPage() {
       </Card>
 
       {/* Reports Tabs */}
-      <Tabs defaultValue="profits" className="w-full">
+      <Tabs defaultValue="devices" className="space-y-4">
         <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="profits" className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            Profits
-          </TabsTrigger>
           <TabsTrigger value="devices" className="flex items-center gap-2">
             <Smartphone className="h-4 w-4" />
             Devices
@@ -637,117 +1508,167 @@ export default function ReportsPage() {
             <Building2 className="h-4 w-4" />
             Companies
           </TabsTrigger>
+          <TabsTrigger value="employees" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Employees
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="profits" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Profit Reports</h2>
-            <Button
-              onClick={() => exportToExcel(profitData, "profit_report", "Profits")}
-              disabled={profitData.length === 0}
-              className="gap-2"
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              Export to Excel
-            </Button>
-          </div>
+        <TabsContent value="devices">
           <Card>
-            <CardContent className="p-0">
-              <DataTable
-                columns={profitColumns}
-                data={profitData}
-                loading={loading}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="devices" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Device Reports</h2>
-            <Button
-              onClick={() => exportToExcel(deviceData, "device_report", "Devices")}
-              disabled={deviceData.length === 0}
-              className="gap-2"
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              Export to Excel
-            </Button>
-          </div>
-          <Card>
-            <CardContent className="p-0">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>
+                Device Reports ({deviceData.length} devices)
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportDeviceData}
+                disabled={deviceData.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Excel
+              </Button>
+            </CardHeader>
+            <CardContent>
               <DataTable
                 columns={deviceColumns}
                 data={deviceData}
+                pagination={{
+                  currentPage: devicePage,
+                  ...devicePagination,
+                }}
+                onPaginationChange={handleDevicePageChange}
                 loading={loading}
+                getRowClassName={(device: DeviceData) => {
+                  const returnCount =
+                    device.sellHistory?.filter((h: any) => h.type === "return")
+                      .length || 0;
+                  return returnCount > 3 ? "bg-red-50 border-red-200" : "";
+                }}
               />
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="transactions" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Transaction Reports</h2>
-            <Button
-              onClick={() => exportToExcel(transactionData, "transaction_report", "Transactions")}
-              disabled={transactionData.length === 0}
-              className="gap-2"
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              Export to Excel
-            </Button>
-          </div>
+        <TabsContent value="transactions">
           <Card>
-            <CardContent className="p-0">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>
+                Transaction Reports ({transactionData.length} transactions)
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportTransactionData}
+                disabled={transactionData.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Excel
+              </Button>
+            </CardHeader>
+            <CardContent>
               <DataTable
                 columns={transactionColumns}
                 data={transactionData}
+                pagination={{
+                  currentPage: transactionPage,
+                  ...transactionPagination,
+                }}
+                onPaginationChange={handleTransactionPageChange}
                 loading={loading}
               />
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="vendors" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Vendor Reports</h2>
-            <Button
-              onClick={() => exportToExcel(vendorReports, "vendor_report", "Vendors")}
-              disabled={vendorReports.length === 0}
-              className="gap-2"
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              Export to Excel
-            </Button>
-          </div>
+        <TabsContent value="vendors">
           <Card>
-            <CardContent className="p-0">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>
+                Vendor Reports ({vendorReports.length} vendors)
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportVendorData}
+                disabled={vendorReports.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Excel
+              </Button>
+            </CardHeader>
+            <CardContent>
               <DataTable
-                columns={vendorReportColumns}
+                columns={vendorColumns}
                 data={vendorReports}
+                pagination={{
+                  currentPage: vendorPage,
+                  ...vendorPagination,
+                }}
+                onPaginationChange={handleVendorPageChange}
                 loading={loading}
               />
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="companies" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Company Reports</h2>
-            <Button
-              onClick={() => exportToExcel(companyReports, "company_report", "Companies")}
-              disabled={companyReports.length === 0}
-              className="gap-2"
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              Export to Excel
-            </Button>
-          </div>
+        <TabsContent value="companies">
           <Card>
-            <CardContent className="p-0">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>
+                Company Reports ({companyReports.length} companies)
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportCompanyData}
+                disabled={companyReports.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Excel
+              </Button>
+            </CardHeader>
+            <CardContent>
               <DataTable
-                columns={companyReportColumns}
+                columns={companyColumns}
                 data={companyReports}
+                pagination={{
+                  currentPage: companyPage,
+                  ...companyPagination,
+                }}
+                onPaginationChange={handleCompanyPageChange}
+                loading={loading}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="employees">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>
+                Employee Reports ({employeeReports.length} employees)
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportEmployeeData}
+                disabled={employeeReports.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Excel
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={employeeColumns}
+                data={employeeReports}
+                pagination={{
+                  currentPage: employeePage,
+                  ...employeePagination,
+                }}
+                onPaginationChange={handleEmployeePageChange}
                 loading={loading}
               />
             </CardContent>
