@@ -55,43 +55,65 @@ export default function EmployeeDevicesPage({
   const [devices, setDevices] = useState<DeviceData[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10,
+    hasNext: false,
+    hasPrev: false,
+  });
+
+  const fetchEmployeeDevices = async (page = 1, searchTerm = "") => {
+    try {
+      setLoading(true);
+      const resolvedParams = await params;
+
+      const [employeeRes, devicesRes] = await Promise.all([
+        getEmployeeById(resolvedParams.id),
+        getAllDevices({ 
+          page, 
+          limit: 10, 
+          pickedBy: resolvedParams.id,
+          search: searchTerm || undefined
+        }),
+      ]);
+
+      setEmployee(employeeRes.data);
+      setDevices(devicesRes.data.devices || []);
+      setPagination(devicesRes.data.pagination || {
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: 0,
+        itemsPerPage: 10,
+        hasNext: false,
+        hasPrev: false,
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to fetch employee devices");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchEmployeeDevices = async () => {
-      try {
-        const resolvedParams = await params;
+    fetchEmployeeDevices(currentPage, search);
+  }, [params, currentPage]);
 
-        const [employeeRes, devicesRes] = await Promise.all([
-          getEmployeeById(resolvedParams.id),
-          getAllDevices({ limit: 0 }),
-        ]);
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setCurrentPage(1);
+      fetchEmployeeDevices(1, search);
+    }, 300);
 
-        // Filter devices picked by this employee
-        const employeeDevices =
-          devicesRes.data.devices?.filter(
-            (device: any) => device.pickedBy?._id === resolvedParams.id
-          ) || [];
+    return () => clearTimeout(timeoutId);
+  }, [search]);
 
-        setEmployee(employeeRes.data);
-        setDevices(employeeDevices);
-      } catch (err: any) {
-        console.error(err);
-        toast.error("Failed to fetch employee devices");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEmployeeDevices();
-  }, [params]);
-
-  const filteredDevices = devices.filter(
-    (device) =>
-      device.deviceId.toLowerCase().includes(search.toLowerCase()) ||
-      device.brand.toLowerCase().includes(search.toLowerCase()) ||
-      device.model.toLowerCase().includes(search.toLowerCase()) ||
-      device.imei1.toLowerCase().includes(search.toLowerCase())
-  );
+  const handlePaginationChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
 
   const handleExport = async () => {
     if (!employee) {
@@ -174,14 +196,14 @@ export default function EmployeeDevicesPage({
             new Date(a.createdAt || a.date).getTime()
         )[0];
         const sellingPrice =
-          latestSell?.selling || latestSell?.amount || device.selling || 0;
-        return `₹${sellingPrice}`;
+          latestSell?.selling || latestSell?.amount || device.selling;
+        return sellingPrice ? `₹${sellingPrice}` : "-";
       },
     },
     {
       accessorKey: "profit",
       header: "Profit",
-      cell: ({ row }) => `₹${row.original.profit}`,
+      cell: ({ row }) => row.original.profit ? `₹${row.original.profit}` : "-",
     },
     {
       accessorKey: "createdAt",
@@ -255,7 +277,7 @@ export default function EmployeeDevicesPage({
               <label className="text-sm font-medium text-gray-500">
                 Total Devices
               </label>
-              <p className="text-lg font-semibold">{filteredDevices.length}</p>
+              <p className="text-lg font-semibold">{pagination.totalItems}</p>
             </div>
           </div>
         </CardContent>
@@ -274,8 +296,10 @@ export default function EmployeeDevicesPage({
         <CardContent className="p-0">
           <DataTable
             columns={deviceColumns}
-            data={filteredDevices}
+            data={devices}
             loading={loading}
+            pagination={pagination}
+            onPaginationChange={handlePaginationChange}
           />
         </CardContent>
       </Card>
